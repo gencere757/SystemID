@@ -2,13 +2,17 @@ clc; clear; close all;
 
 load twotankdata;
 
+%Find state lag 
 max_lag = 25;
 
 figure;
-parcorr(y, max_lag);
+[acf_vals, lags_pacf] = parcorr(y, max_lag);
 title('Autocorrelation of Output State');
 xlabel('Lags');
 ylabel('Sample Autocorrelation');
+
+acf_vals(lags_pacf == 0) = [];
+lags_pacf(lags_pacf == 0) = [];
 
 
 u_diff = diff(u);

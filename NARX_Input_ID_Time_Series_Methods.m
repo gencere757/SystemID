@@ -28,6 +28,9 @@ y_diff = diff(y);
 
 figure;
 max_lag = 100;  % Check cross-correlation up to 100 
+
+
+
 %Compute and plot the cross correlation between input and output
 [cc_vals, lags_cc] = crosscorr(u_diff, y_diff, max_lag);
 crosscorr(u_diff, y_diff, max_lag);
@@ -43,21 +46,13 @@ lags_cc_pos = lags_cc(positive_lags_idx);
 N = length(u_diff);
 confidence_threshold = 2 / sqrt(N); 
 
-% Find the first positive lag where correlation breaks above the threshold
-significant_lags = lags_cc_pos(abs(cc_vals_pos) > confidence_threshold);
 
-if ~isempty(significant_lags)
-    dead_time = significant_lags(1); % First significant lag = Dead Time
+
+% Find the first positive lag where correlation breaks above the threshold
+significant_input_lags = lags_cc_pos(abs(cc_vals_pos) > confidence_threshold);
+
+if ~isempty(significant_input_lags)
+    dead_time = significant_input_lags(1); % First significant lag = Dead Time
 else
     dead_time = 0; % Default to 0 if no lag breaks the confidence threshold
 end
-
-%Read the values from cross correlation graph and the the interval where
-%cross correlation is confidently above the confidence threshold
-input_lags = lags_cc_pos(4:80);
-
-%The undifferentiated cross correlation signals
-% figure;
-% crosscorr(u, y, max_lag); 
-% title('Cross-Correlation between Input and Output');
-% xlim([0, max_lag]);

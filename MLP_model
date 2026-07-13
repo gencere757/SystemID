@@ -1,6 +1,5 @@
 load("features.mat");
 load("data.mat");
-z = iddata(y,u,1);
 nk = dead_time;                      % Your identified dead time (e.g., 2)
 nb = length(significant_input_lags); % Total number of input terms (e.g., 78)
 na = max(top_output_lags);           % Max past output dependence (e.g., 5)
@@ -8,10 +7,8 @@ na = max(top_output_lags);           % Max past output dependence (e.g., 5)
 % Define the structural matrix (same as linear ARX)
 orders = [na, nb, nk];
 
-%% Split data for validation (first 70% for training, last 30% for testing)
-N_split = round(0.7 * z.N);
-z_train = z(1:N_split);
-z_val = z(N_split+1:end);
+
+
 
 %% Make input and output regressors
 maxLag = max([significant_input_lags(:); top_output_lags(:)]);
@@ -33,3 +30,53 @@ for k = maxLag+1:N
     Y(k-maxLag) = y(k);
 
 end
+
+%% Split data for validation (first 70% for training, last 30% for testing)
+Ntrain = round(0.7 * N);
+
+XTrain = X(1:Ntrain,:);
+YTrain = Y(1:Ntrain);
+
+XVal = X(Ntrain+1:end,:);
+YVal = Y(Ntrain+1:end);
+
+%% Normalize the data
+[XTrain,muX,sigmaX] = zscore(XTrain);
+
+XVal = (XVal-muX)./sigmaX;
+
+[YTrain,muY,sigmaY] = zscore(YTrain);
+
+YVal = (YVal-muY)./sigmaY;
+%% Architecture
+numFeatures = size(XTrain,2);
+
+layers = [
+
+    featureInputLayer(numFeatures,"Normalization","none")
+
+    fullyConnectedLayer(128)
+    reluLayer
+
+    fullyConnectedLayer(64)
+    reluLayer
+
+    fullyConnectedLayer(32)
+    reluLayer
+
+    fullyConnectedLayer(1)
+
+    regressionLayer
+
+];
+
+options = trainingOptions("adam",...
+    MaxEpochs=200,...
+    MiniBatchSize=256,...
+    InitialLearnRate=1e-3,...
+    Shuffle="every-epoch",...
+    ValidationData={XVal,YVal},...
+    Plots="training-progress",...
+    Verbose=false);
+%% Train
+net = trainNetwork(XTrain,YTrain,layers,options);

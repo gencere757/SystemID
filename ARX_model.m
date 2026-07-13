@@ -2,7 +2,7 @@ z = iddata(y,u,1);
 
 nk = dead_time;               % Your identified dead time (e.g., 2)
 nb = length(significant_input_lags); % Total number of input terms (e.g., 78)
-na = max(top_5_output_lags);   % Max past output dependence (e.g., 5)
+na = max(top_output_lags);   % Max past output dependence (e.g., 5)
 
 % Define the structural matrix
 orders = [na, nb, nk];

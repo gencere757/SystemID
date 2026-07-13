@@ -1,0 +1,35 @@
+load("features.mat");
+load("data.mat");
+z = iddata(y,u,1);
+nk = dead_time;                      % Your identified dead time (e.g., 2)
+nb = length(significant_input_lags); % Total number of input terms (e.g., 78)
+na = max(top_output_lags);           % Max past output dependence (e.g., 5)
+
+% Define the structural matrix (same as linear ARX)
+orders = [na, nb, nk];
+
+%% Split data for validation (first 70% for training, last 30% for testing)
+N_split = round(0.7 * z.N);
+z_train = z(1:N_split);
+z_val = z(N_split+1:end);
+
+%% Make input and output regressors
+maxLag = max([significant_input_lags(:); top_output_lags(:)]);
+
+N = length(y);
+
+X = zeros(N-maxLag, length(top_output_lags)+length(significant_input_lags));
+Y = zeros(N-maxLag,1);
+
+for k = maxLag+1:N
+
+    % Output regressors
+    yReg = y(k-top_output_lags);
+
+    % Input regressors
+    uReg = u(k-significant_input_lags);
+
+    X(k-maxLag,:) = [yReg(:)' uReg(:)'];
+    Y(k-maxLag) = y(k);
+
+end

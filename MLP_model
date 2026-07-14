@@ -1,6 +1,6 @@
 clc;clear;close all;
 load("features.mat");
-load("data.mat");
+load("data_real.mat");
 
 %% Make input and output regressors
 maxLag = max([significant_input_lags(:); top_output_lags(:)]);
@@ -23,18 +23,33 @@ for k = maxLag+1:N
 
 end
 
-%% Split data for validation (first 70% for training, last 30% for testing)
+%% Split data for validation (random or sequential)
+
+randomSplit = false;   % true = random split, false = sequential split
+
 total_samples = size(X,1);
-random = randperm(total_samples);
 train_ratio = 0.7;
-train_amount = total_samples*train_ratio;
+train_amount = floor(total_samples * train_ratio);
 
+if randomSplit
 
-train_idx = random(1:train_amount);
-val_idx = random(train_amount+1:end);
+    % Random split
+    idx = randperm(total_samples);
+
+    train_idx = idx(1:train_amount);
+    val_idx = idx(train_amount+1:end);
+
+else
+
+    % Sequential split (first 70% train, last 30% validation)
+    train_idx = 1:train_amount;
+    val_idx = train_amount+1:total_samples;
+
+end
 
 XTrain = X(train_idx,:);
 YTrain = Y(train_idx);
+
 XVal = X(val_idx,:);
 YVal = Y(val_idx);
 
@@ -81,18 +96,42 @@ options = trainingOptions("adam",...
 net = trainNetwork(XTrain,YTrain,layers,options);
 
 %% Prediction
-YPred = predict(net,XVal);
+YPred = predict(net, XVal);
 
 % Undo normalization
-YPred = YPred*sigmaY + muY;
-YTrue = YVal*sigmaY + muY;
-%% Calculate error
-rmse = sqrt(mean((YTrue-YPred).^2));
+YPred = YPred * sigmaY + muY;
+YTrue = YVal * sigmaY + muY;
 
-fit = 100*(1-norm(YTrue-YPred)/norm(YTrue-mean(YTrue)));
+%% Restore original order (only needed for random split)
 
+if randomSplit
+
+    [val_idx_sorted, order] = sort(val_idx);
+
+    YTrue_plot = YTrue(order);
+    YPred_plot = YPred(order);
+
+else
+
+    val_idx_sorted = val_idx;
+
+    YTrue_plot = YTrue;
+    YPred_plot = YPred;
+
+end
+
+%% Calculate error using ordered data
+rmse = sqrt(mean((YTrue_plot - YPred_plot).^2));
+mae = mean(abs(YTrue_plot - YPred_plot));
+
+fit = 100 * (1 - norm(YTrue_plot - YPred_plot) / norm(YTrue_plot - mean(YTrue_plot)));
+
+%% Plot
 figure;
-plot(YTrue);
+plot(val_idx_sorted, YTrue_plot, 'b');
 hold on;
-plot(YPred);
+plot(val_idx_sorted, YPred_plot, 'r');
 legend('True','Prediction');
+xlabel('Sample');
+ylabel('Output');
+grid on;

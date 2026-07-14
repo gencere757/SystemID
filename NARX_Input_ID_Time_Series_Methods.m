@@ -58,3 +58,4 @@ if ~isempty(significant_input_lags)
 else
     dead_time = 0; % Default to 0 if no lag breaks the confidence threshold
 end
+save('features.mat', 'top_output_lags', 'significant_input_lags', 'dead_time');

@@ -25,7 +25,7 @@ end
 
 %% Split data for validation (random or sequential)
 
-randomSplit = false;   % true = random split, false = sequential split
+randomSplit = true;   % true = random split, false = sequential split
 
 total_samples = size(X,1);
 train_ratio = 0.7;
@@ -103,18 +103,18 @@ YPred = predict(net, XVal);
 YPred = YPred * sigmaY + muY;
 YTrue = YVal * sigmaY + muY;
 
-%% Restore original order (only needed for random split)
+%% Restore validation order (only needed for random split)
 
 if randomSplit
 
-    [idx_sorted, order] = sort(idx);
+    [val_idx_sorted, order] = sort(val_idx);
 
     YTrue_plot = YTrue(order);
     YPred_plot = YPred(order);
 
 else
 
-    idx_sorted = idx;
+    val_idx_sorted = val_idx;
 
     YTrue_plot = YTrue;
     YPred_plot = YPred;
@@ -126,13 +126,23 @@ rmse = sqrt(mean((YTrue_plot - YPred_plot).^2));
 mae = mean(abs(YTrue_plot - YPred_plot));
 
 fit = 100 * (1 - norm(YTrue_plot - YPred_plot) / norm(YTrue_plot - mean(YTrue_plot)));
-%% Plot
-YPredWhole = predict(net,X);        %Predict whole sequence
+%% Predict whole sequence
+
+% Normalize whole input using training statistics
+XWhole = (X - muX)./sigmaX;
+
+YPredWhole = predict(net, XWhole);
+
+% Undo output normalization
+YPredWhole = YPredWhole*sigmaY + muY;
+
+%% Plot full sequence
 
 figure;
-plot(idx_sorted, Y, 'b');
+plot(Y,'b','LineWidth',1.5);
 hold on;
-plot(idx_sorted, YPredWhole, 'r');
+plot(YPredWhole,'r','LineWidth',1.5);
+
 legend('True','Prediction');
 xlabel('Sample');
 ylabel('Output');

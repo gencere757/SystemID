@@ -27,7 +27,7 @@ end
 total_samples = size(X,1);
 random = randperm(total_samples);
 train_ratio = 0.7;
-train_amount = N*train_ratio;
+train_amount = total_samples*train_ratio;
 
 
 train_idx = random(1:train_amount);
@@ -87,12 +87,12 @@ YPred = predict(net,XVal);
 YPred = YPred*sigmaY + muY;
 YTrue = YVal*sigmaY + muY;
 %% Calculate error
-rmse = sqrt(mean((YTrue-YPred).^2))
+rmse = sqrt(mean((YTrue-YPred).^2));
 
-fit = 100*(1-norm(YTrue-YPred)/norm(YTrue-mean(YTrue)))
+fit = 100*(1-norm(YTrue-YPred)/norm(YTrue-mean(YTrue)));
 
-figure
-plot(YTrue)
-hold on
-plot(YPred)
-legend('True','Prediction')
+figure;
+plot(YTrue);
+hold on;
+plot(YPred);
+legend('True','Prediction');

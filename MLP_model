@@ -1,14 +1,6 @@
+clc;clear;close all;
 load("features.mat");
 load("data.mat");
-nk = dead_time;                      % Your identified dead time (e.g., 2)
-nb = length(significant_input_lags); % Total number of input terms (e.g., 78)
-na = max(top_output_lags);           % Max past output dependence (e.g., 5)
-
-% Define the structural matrix (same as linear ARX)
-orders = [na, nb, nk];
-
-
-
 
 %% Make input and output regressors
 maxLag = max([significant_input_lags(:); top_output_lags(:)]);
@@ -32,13 +24,19 @@ for k = maxLag+1:N
 end
 
 %% Split data for validation (first 70% for training, last 30% for testing)
-Ntrain = round(0.7 * N);
+total_samples = size(X,1);
+random = randperm(total_samples);
+train_ratio = 0.7;
+train_amount = N*train_ratio;
 
-XTrain = X(1:Ntrain,:);
-YTrain = Y(1:Ntrain);
 
-XVal = X(Ntrain+1:end,:);
-YVal = Y(Ntrain+1:end);
+train_idx = random(1:train_amount);
+val_idx = random(train_amount+1:end);
+
+XTrain = X(train_idx,:);
+YTrain = Y(train_idx);
+XVal = X(val_idx,:);
+YVal = Y(val_idx);
 
 %% Normalize the data
 [XTrain,muX,sigmaX] = zscore(XTrain);
@@ -48,6 +46,7 @@ XVal = (XVal-muX)./sigmaX;
 [YTrain,muY,sigmaY] = zscore(YTrain);
 
 YVal = (YVal-muY)./sigmaY;
+
 %% Architecture
 numFeatures = size(XTrain,2);
 
@@ -71,7 +70,7 @@ layers = [
 ];
 
 options = trainingOptions("adam",...
-    MaxEpochs=200,...
+    MaxEpochs=50,...
     MiniBatchSize=256,...
     InitialLearnRate=1e-3,...
     Shuffle="every-epoch",...
@@ -80,3 +79,20 @@ options = trainingOptions("adam",...
     Verbose=false);
 %% Train
 net = trainNetwork(XTrain,YTrain,layers,options);
+
+%% Prediction
+YPred = predict(net,XVal);
+
+% Undo normalization
+YPred = YPred*sigmaY + muY;
+YTrue = YVal*sigmaY + muY;
+%% Calculate error
+rmse = sqrt(mean((YTrue-YPred).^2))
+
+fit = 100*(1-norm(YTrue-YPred)/norm(YTrue-mean(YTrue)))
+
+figure
+plot(YTrue)
+hold on
+plot(YPred)
+legend('True','Prediction')

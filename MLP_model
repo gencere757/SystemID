@@ -44,6 +44,7 @@ else
     % Sequential split (first 70% train, last 30% validation)
     train_idx = 1:train_amount;
     val_idx = train_amount+1:total_samples;
+    idx = [train_idx val_idx];
 
 end
 
@@ -106,14 +107,14 @@ YTrue = YVal * sigmaY + muY;
 
 if randomSplit
 
-    [val_idx_sorted, order] = sort(val_idx);
+    [idx_sorted, order] = sort(idx);
 
     YTrue_plot = YTrue(order);
     YPred_plot = YPred(order);
 
 else
 
-    val_idx_sorted = val_idx;
+    idx_sorted = idx;
 
     YTrue_plot = YTrue;
     YPred_plot = YPred;
@@ -125,12 +126,13 @@ rmse = sqrt(mean((YTrue_plot - YPred_plot).^2));
 mae = mean(abs(YTrue_plot - YPred_plot));
 
 fit = 100 * (1 - norm(YTrue_plot - YPred_plot) / norm(YTrue_plot - mean(YTrue_plot)));
-
 %% Plot
+YPredWhole = predict(net,X);        %Predict whole sequence
+
 figure;
-plot(val_idx_sorted, YTrue_plot, 'b');
+plot(idx_sorted, Y, 'b');
 hold on;
-plot(val_idx_sorted, YPred_plot, 'r');
+plot(idx_sorted, YPredWhole, 'r');
 legend('True','Prediction');
 xlabel('Sample');
 ylabel('Output');

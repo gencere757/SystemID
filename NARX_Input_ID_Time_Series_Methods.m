@@ -1,4 +1,4 @@
-clc; close all;
+clc; clear; close all;
 
 %load twotankdata;   %Load the data
 load("data.mat");
@@ -45,7 +45,6 @@ cc_vals_pos = cc_vals(positive_lags_idx);
 lags_cc_pos = lags_cc(positive_lags_idx);
 
 %Create confidence interval
-N = length(u_diff);
 confidence_threshold = 0.05; 
 
 

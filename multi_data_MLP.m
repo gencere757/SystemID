@@ -1,5 +1,5 @@
 clc;clear;close all;
-load("features_2.mat");
+load("features_combined.mat");
 maxNumCompThreads(feature('numcores'));
 
 

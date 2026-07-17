@@ -151,7 +151,8 @@ xlabel('Sample (concatenated across all files)'); ylabel('Output');
 title('Prediction across all training datasets (dashed lines = dataset boundaries)');
 grid on;
 
-save('MLP_model.mat', 'net', 'datasetNames');
+save('MLP_model.mat', 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
+     'significant_input_lags', 'muX', 'sigmaX', 'muY', 'sigmaY');
 
 %% --- Local function: build regressors for one dataset ---
 function [X, Y] = buildRegressors(y, u, top_output_lags, significant_input_lags, maxLag)

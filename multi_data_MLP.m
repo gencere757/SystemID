@@ -55,20 +55,74 @@ Y = cat(1, Yall{:});
 rowsPerDataset = cellfun(@length, Yall);
 boundarySamples = cumsum(rowsPerDataset);
 
-%% Split data for validation (random or sequential)
-randomSplit = true;   % true = random split, false = sequential split
+%% Split data for validation (random, sequential, or block)
+splitMode = "block";   % "random"     = point-wise random split (leaks — adjacent NARX
+                        %                rows share nearly all lag values, so val "fit"
+                        %                is optimistically biased)
+                        % "sequential" = first train_ratio in time, rest held out
+                        % "block"      = contiguous blocks *within each dataset*, blocks
+                        %                randomly assigned to train/val. Avoids the
+                        %                point-wise leakage of "random" while still
+                        %                sampling every dataset's full time range,
+                        %                unlike "sequential". Mirrors the split LSTM.m
+                        %                already uses.
 total_samples = size(X,1);
 train_ratio = 0.7;
 train_amount = floor(total_samples * train_ratio);
-if randomSplit
-    idx = randperm(total_samples);
-    train_idx = idx(1:train_amount);
-    val_idx = idx(train_amount+1:end);
-else
-    train_idx = 1:train_amount;
-    val_idx = train_amount+1:total_samples;
-    idx = [train_idx val_idx];
+blockSize = 500;   % rows per block for "block" mode; keep >> maxLag
+
+switch splitMode
+    case "random"
+        idx = randperm(total_samples);
+        train_idx = idx(1:train_amount);
+        val_idx = idx(train_amount+1:end);
+
+    case "sequential"
+        train_idx = 1:train_amount;
+        val_idx = train_amount+1:total_samples;
+        idx = [train_idx val_idx];
+
+    case "block"
+        % Split each dataset's row range independently into contiguous
+        % blocks, then randomly assign whole blocks to train/val. Blocks
+        % never straddle a dataset boundary, so every block is a genuine
+        % contiguous time window from one recording.
+        train_idx = [];
+        val_idx = [];
+        datasetStarts = [0; boundarySamples(:)];  % last row index before each dataset begins
+        for d = 1:numel(rowsPerDataset)
+            rangeStart = datasetStarts(d) + 1;
+            rangeEnd = datasetStarts(d+1);
+            nRows = rangeEnd - rangeStart + 1;
+            nBlocksD = max(1, floor(nRows / blockSize));
+            blockOrder = randperm(nBlocksD);
+            nTrainBlocks = round(train_ratio * nBlocksD);
+            trainBlocks = blockOrder(1:nTrainBlocks);
+            valBlocks = blockOrder(nTrainBlocks+1:end);
+            for b = trainBlocks
+                bStart = rangeStart + (b-1)*blockSize;
+                bEnd = min(rangeStart + b*blockSize - 1, rangeEnd);
+                train_idx = [train_idx, bStart:bEnd]; %#ok<AGROW>
+            end
+            for b = valBlocks
+                bStart = rangeStart + (b-1)*blockSize;
+                bEnd = min(rangeStart + b*blockSize - 1, rangeEnd);
+                val_idx = [val_idx, bStart:bEnd]; %#ok<AGROW>
+            end
+            % Leftover rows past the last full block go to train
+            leftoverStart = rangeStart + nBlocksD*blockSize;
+            if leftoverStart <= rangeEnd
+                train_idx = [train_idx, leftoverStart:rangeEnd]; %#ok<AGROW>
+            end
+        end
+        train_idx = sort(train_idx);
+        val_idx = sort(val_idx);
+        idx = [train_idx val_idx];
+
+    otherwise
+        error('Unknown splitMode "%s". Use "random", "sequential", or "block".', splitMode);
 end
+
 XTrain = X(train_idx,:);
 YTrain = Y(train_idx);
 XVal = X(val_idx,:);
@@ -121,11 +175,12 @@ YPred = predict(net, XVal);
 YPred = YPred * sigmaY + muY;
 YTrue = YVal * sigmaY + muY;
 
-if randomSplit
+if splitMode == "random"
     [val_idx_sorted, order] = sort(val_idx);
     YTrue_plot = YTrue(order);
     YPred_plot = YPred(order);
 else
+    % "sequential" and "block" both produce an already-sorted val_idx
     val_idx_sorted = val_idx;
     YTrue_plot = YTrue;
     YPred_plot = YPred;

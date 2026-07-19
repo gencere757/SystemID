@@ -1,8 +1,8 @@
 clc; clear; close all;
 
 %% Load model + normalization stats
-load("MLP_model.mat");   % must contain: net, maxLag, top_output_lags,
-                          % significant_input_lags, muX, sigmaX, muY, sigmaY
+load("MLP_model.mat");   % must contain: net, maxLag, top_output_lags, significant_input_lags,
+                          % top_output_dot_lags, significant_input_dot_lags, muX, sigmaX, muY, sigmaY
 
 %% Config: folder containing datasets to evaluate
 evalFolder = "Training Data";   % change to a separate "Test Data" folder if you have one
@@ -26,18 +26,39 @@ for i = 1:numel(fileList)
     y = S.y(:);
     u = S.u(:);
 
-    %% Build regressors
+    if isfield(S,'T')
+        T_i = S.T;
+    else
+        T_i = 1;
+        warning('"%s" has no T field; assuming unit sample time for derivative regressors.', fileList(i).name);
+    end
+    % Optional: smooth before differentiating — gradient() amplifies sensor
+    % noise. Delete the two lines below to activate. Reassigns y/u, so it
+    % also changes Ynew (the measured target used for RMSE/MAE/Fit) and
+    % the level regressors — you'd be scoring against smoothed ground
+    % truth, not the raw measurement.
+    % y = smoothdata(y, "sgolay", 31);
+    % u = smoothdata(u, "sgolay", 31);
+
+    dy = gradient(y, T_i);   % dy/dt
+    du = gradient(u, T_i);   % du/dt
+
+    %% Build regressors — must match buildRegressors() in multi_data_MLP.m exactly
     Nnew = length(y);
     if Nnew <= maxLag
         warning('Skipping "%s": too short (length=%d, maxLag=%d).', fileList(i).name, Nnew, maxLag);
         continue;
     end
-    Xnew = zeros(Nnew-maxLag, length(top_output_lags)+length(significant_input_lags));
+    nFeat = length(top_output_lags) + length(significant_input_lags) + ...
+            length(top_output_dot_lags) + length(significant_input_dot_lags);
+    Xnew = zeros(Nnew-maxLag, nFeat);
     Ynew = zeros(Nnew-maxLag,1);
     for k = maxLag+1:Nnew
         yReg = y(k-top_output_lags);
         uReg = u(k-significant_input_lags);
-        Xnew(k-maxLag,:) = [yReg(:)' uReg(:)'];
+        dyReg = dy(k-top_output_dot_lags);
+        duReg = du(k-significant_input_dot_lags);
+        Xnew(k-maxLag,:) = [yReg(:)' uReg(:)' dyReg(:)' duReg(:)'];
         Ynew(k-maxLag) = y(k);
     end
 

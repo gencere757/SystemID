@@ -1,43 +1,106 @@
 clc; clear; close all;
-load("data_real_2.mat");     % adjust filename if data.mat is genuinely different from before
-load("features_2.mat");      % adjust filename if features.mat is genuinely different from before
+load("features_combined.mat");   % top_output_lags, significant_input_lags, dead_time (+ dot variants, unused here)
 maxNumCompThreads(feature('numcores'));
 
-%% Build equal-length input/output windows for each sample
+%% Load every dataset in the "Training Data" folder
+dataFolder = "Training Data";
+fileList = dir(fullfile(dataFolder, "*.mat"));
+if isempty(fileList)
+    error('No .mat files found in "%s". Check the folder name/path.', dataFolder);
+end
+
 max_lag = max([significant_input_lags(:); top_output_lags(:)]);
 L = max_lag - dead_time;     % common window length for both channels
 if L < 1
     error('dead_time must be smaller than max_lag.');
 end
+startIdx = max_lag + 1;
 
-N = length(y);
-startIdx = max_lag + 1;      % first valid k, ensures all indices below are >= 1
-X = cell(N-max_lag, 1);
-Y = zeros(N-max_lag, 1);
+Xall = {};
+Yall = {};
+datasetNames = strings(numel(fileList),1);
 
-for k = startIdx:N
-    row = k - max_lag;
-    uSeq = u(k-dead_time-L+1 : k-dead_time);   % delayed input window, length L
-    ySeq = y(k-L : k-1);                       % past output window, length L
-    X{row} = [uSeq(:)'; ySeq(:)'];             % 2 x L: channel 1 = u, channel 2 = y
-    Y(row) = y(k);
+for i = 1:numel(fileList)
+    fpath = fullfile(fileList(i).folder, fileList(i).name);
+    Dtmp = load(fpath);   % load into a struct to avoid name collisions across files
+
+    if ~isfield(Dtmp,'y') || ~isfield(Dtmp,'u')
+        warning('Skipping "%s": missing y or u variable.', fileList(i).name);
+        continue;
+    end
+
+    y_i = Dtmp.y(:);
+    u_i = Dtmp.u(:);
+    N = length(y_i);
+
+    if N <= startIdx
+        warning('Skipping "%s": too short (length=%d) for max_lag=%d.', fileList(i).name, N, max_lag);
+        continue;
+    end
+
+    Xi = cell(N-max_lag, 1);
+    Yi = zeros(N-max_lag, 1);
+    for k = startIdx:N
+        row = k - max_lag;
+        uSeq = u_i(k-dead_time-L+1 : k-dead_time);   % delayed input window, length L
+        ySeq = y_i(k-L : k-1);                       % past output window, length L
+        Xi{row} = [uSeq(:)'; ySeq(:)'];               % 2 x L: channel 1 = u, channel 2 = y
+        Yi(row) = y_i(k);
+    end
+
+    Xall{end+1} = Xi; %#ok<AGROW>
+    Yall{end+1} = Yi; %#ok<AGROW>
+    datasetNames(i) = fileList(i).name;
+
+    fprintf('Loaded "%s": %d samples -> %d sequence rows\n', fileList(i).name, N, length(Yi));
 end
 
-%% Train/val split — block-random, same rationale as the MLP (chirp is non-stationary)
-total_samples = numel(X);
+if isempty(Yall)
+    error('No valid datasets were processed.');
+end
+
+X = cat(1, Xall{:});
+Y = cat(1, Yall{:});
+
+% Cumulative row counts, for keeping blocks within one dataset and for
+% plotting dataset boundaries later
+rowsPerDataset = cellfun(@length, Yall);
+boundarySamples = cumsum(rowsPerDataset);
+
+%% Split data for validation — contiguous blocks *within each dataset*,
+% blocks randomly assigned to train/val. Mirrors the "block" split mode in
+% multi_data_MLP.m: avoids point-wise leakage between adjacent, mostly-
+% overlapping windows while still sampling every dataset's full time range.
 train_ratio = 0.7;
-blockSize = 500;   % keep >> max_lag
-numBlocks = floor(total_samples/blockSize);
-blockOrder = randperm(numBlocks);
-train_blocks = blockOrder(1:round(train_ratio*numBlocks));
-val_blocks   = blockOrder(round(train_ratio*numBlocks)+1:end);
+blockSize = 500;   % rows per block; keep >> max_lag
 
-train_idx = []; val_idx = [];
-for b = train_blocks
-    train_idx = [train_idx, (b-1)*blockSize+1 : min(b*blockSize, total_samples)]; %#ok<AGROW>
-end
-for b = val_blocks
-    val_idx = [val_idx, (b-1)*blockSize+1 : min(b*blockSize, total_samples)]; %#ok<AGROW>
+train_idx = [];
+val_idx = [];
+datasetStarts = [0; boundarySamples(:)];
+for d = 1:numel(rowsPerDataset)
+    rangeStart = datasetStarts(d) + 1;
+    rangeEnd = datasetStarts(d+1);
+    nRows = rangeEnd - rangeStart + 1;
+    nBlocksD = max(1, floor(nRows / blockSize));
+    blockOrder = randperm(nBlocksD);
+    nTrainBlocks = round(train_ratio * nBlocksD);
+    trainBlocks = blockOrder(1:nTrainBlocks);
+    valBlocks = blockOrder(nTrainBlocks+1:end);
+    for b = trainBlocks
+        bStart = rangeStart + (b-1)*blockSize;
+        bEnd = min(rangeStart + b*blockSize - 1, rangeEnd);
+        train_idx = [train_idx, bStart:bEnd]; %#ok<AGROW>
+    end
+    for b = valBlocks
+        bStart = rangeStart + (b-1)*blockSize;
+        bEnd = min(rangeStart + b*blockSize - 1, rangeEnd);
+        val_idx = [val_idx, bStart:bEnd]; %#ok<AGROW>
+    end
+    % Leftover rows past the last full block go to train
+    leftoverStart = rangeStart + nBlocksD*blockSize;
+    if leftoverStart <= rangeEnd
+        train_idx = [train_idx, leftoverStart:rangeEnd]; %#ok<AGROW>
+    end
 end
 train_idx = sort(train_idx);
 val_idx = sort(val_idx);
@@ -109,4 +172,20 @@ title(sprintf('LSTM Validation Predictions (RMSE=%.3f, MAE=%.3f, Fit=%.1f%%)', r
 xlabel('Sample'); ylabel('Output');
 grid on;
 
-save('lstm_model.mat', 'net', 'muX', 'sigmaX', 'muY', 'sigmaY');
+%% Predict whole sequence (all datasets, concatenated in load order)
+Xnorm = normalizeSeq(X);
+YPredWhole = predict(net, Xnorm);
+YPredWhole = YPredWhole*sigmaY + muY;
+
+figure;
+plot(Y,'b','LineWidth',1.5); hold on;
+plot(YPredWhole,'r','LineWidth',1.5);
+for b = boundarySamples(1:end-1)
+    xline(b, 'k--');
+end
+legend('True','Prediction');
+xlabel('Sample (concatenated across all files)'); ylabel('Output');
+title('LSTM prediction across all training datasets (dashed lines = dataset boundaries)');
+grid on;
+
+save('lstm_model.mat', 'net', 'datasetNames', 'max_lag', 'dead_time', 'muX', 'sigmaX', 'muY', 'sigmaY');

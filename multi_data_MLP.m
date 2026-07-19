@@ -11,7 +11,8 @@ if isempty(fileList)
     error('No .mat files found in "%s". Check the folder name/path.', dataFolder);
 end
 
-maxLag = max([significant_input_lags(:); top_output_lags(:)]);
+maxLag = max([significant_input_lags(:); top_output_lags(:); ...
+              significant_input_dot_lags(:); top_output_dot_lags(:)]);
 
 Xall = {};
 Yall = {};
@@ -31,14 +32,32 @@ for i = 1:numel(fileList)
     y_i = Dtmp.y(:);
     u_i = Dtmp.u(:);
 
-    if isfield(Dtmp,'T') && exist('T_ref','var') && abs(Dtmp.T - T_ref) > eps
+    if isfield(Dtmp,'T')
+        T_i = Dtmp.T;
+    else
+        T_i = 1;
+        warning('"%s" has no T field; assuming unit sample time for derivative regressors.', fileList(i).name);
+    end
+    if exist('T_ref','var') && abs(T_i - T_ref) > eps
         warning('"%s" has a different sampling time (T=%.6g) than the first file (T=%.6g).', ...
-            fileList(i).name, Dtmp.T, T_ref);
-    elseif isfield(Dtmp,'T') && ~exist('T_ref','var')
-        T_ref = Dtmp.T;
+            fileList(i).name, T_i, T_ref);
+    elseif ~exist('T_ref','var')
+        T_ref = T_i;
     end
 
-    [Xi, Yi] = buildRegressors(y_i, u_i, top_output_lags, significant_input_lags, maxLag);
+    % Optional: smooth before differentiating — gradient() amplifies sensor
+    % noise. Delete the two lines below to activate. Reassigns y_i/u_i, so
+    % it also affects the level regressors AND the training target Y
+    % (Y = y_i in buildRegressors), not just dy_i/du_i — smoothing here
+    % changes what the network is being fit to, not just the rate inputs.
+    % y_i = smoothdata(y_i, "sgolay", 31);
+    % u_i = smoothdata(u_i, "sgolay", 31);
+
+    dy_i = gradient(y_i, T_i);   % dy/dt
+    du_i = gradient(u_i, T_i);   % du/dt
+
+    [Xi, Yi] = buildRegressors(y_i, u_i, dy_i, du_i, top_output_lags, significant_input_lags, ...
+                                top_output_dot_lags, significant_input_dot_lags, maxLag);
 
     Xall{end+1} = Xi; %#ok<AGROW>
     Yall{end+1} = Yi; %#ok<AGROW>
@@ -207,17 +226,25 @@ title('Prediction across all training datasets (dashed lines = dataset boundarie
 grid on;
 
 save('MLP_model.mat', 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
-     'significant_input_lags', 'muX', 'sigmaX', 'muY', 'sigmaY');
+     'significant_input_lags', 'top_output_dot_lags', 'significant_input_dot_lags', ...
+     'muX', 'sigmaX', 'muY', 'sigmaY');
 
 %% --- Local function: build regressors for one dataset ---
-function [X, Y] = buildRegressors(y, u, top_output_lags, significant_input_lags, maxLag)
+% Feature vector per row = [past y at top_output_lags | past u at significant_input_lags |
+%                            past dy/dt at top_output_dot_lags | past du/dt at significant_input_dot_lags]
+function [X, Y] = buildRegressors(y, u, dy, du, top_output_lags, significant_input_lags, ...
+                                   top_output_dot_lags, significant_input_dot_lags, maxLag)
     N = length(y);
-    X = zeros(N-maxLag, length(top_output_lags)+length(significant_input_lags));
+    nFeat = length(top_output_lags) + length(significant_input_lags) + ...
+            length(top_output_dot_lags) + length(significant_input_dot_lags);
+    X = zeros(N-maxLag, nFeat);
     Y = zeros(N-maxLag,1);
     for k = maxLag+1:N
         yReg = y(k-top_output_lags);
         uReg = u(k-significant_input_lags);
-        X(k-maxLag,:) = [yReg(:)' uReg(:)'];
+        dyReg = dy(k-top_output_dot_lags);
+        duReg = du(k-significant_input_dot_lags);
+        X(k-maxLag,:) = [yReg(:)' uReg(:)' dyReg(:)' duReg(:)'];
         Y(k-maxLag) = y(k);
     end
 end

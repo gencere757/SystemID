@@ -4,14 +4,15 @@ load("Controllers\notch_base.mat");
 
 %% Config
 cleanedDataFile = "Test Processed Data\ELEVATION_SQUARE_WAVE_25HZ_10URAD_processed.mat";   % dataset for normalization stats AND for u timeseries
-modelFile = "Multi_Data_MLP_model.mat";
+modelFile = "MLP_model.mat";
 outputFile = "SimulinkParams.mat";
 
 %% Load model file (expects: net, maxLag, top_output_lags, significant_input_lags,
 %% and ideally muX, sigmaX, muY, sigmaY already saved from training)
 M = load(modelFile);
 
-requiredForRegressor = {'maxLag','top_output_lags','significant_input_lags'};
+requiredForRegressor = {'maxLag','top_output_lags','significant_input_lags', ...
+                         'top_output_dot_lags','significant_input_dot_lags'};
 for i = 1:numel(requiredForRegressor)
     if ~isfield(M, requiredForRegressor{i})
         error('"%s" is missing "%s". Re-save your training script''s model file with this variable included.', ...
@@ -22,6 +23,8 @@ end
 maxLag = M.maxLag;
 top_output_lags = M.top_output_lags;
 significant_input_lags = M.significant_input_lags;
+top_output_dot_lags = M.top_output_dot_lags;
+significant_input_dot_lags = M.significant_input_dot_lags;
 net = M.net;
 
 %% Always load the cleaned data file — needed for u (and possibly for stats recompute)
@@ -51,16 +54,24 @@ else
     fprintf('Normalization stats not found in "%s" — recomputing from "%s".\n', modelFile, cleanedDataFile);
 
     % Rebuild the same regressor matrix used at training time
+    % (must match buildRegressors() in multi_data_MLP.m exactly, including
+    % the derivative regressors — order: y-lags, u-lags, dy-lags, du-lags)
     N = length(y);
     if N <= maxLag
         error('"%s" is shorter than maxLag (%d) — cannot rebuild regressors.', cleanedDataFile, maxLag);
     end
-    X = zeros(N-maxLag, length(top_output_lags)+length(significant_input_lags));
+    dy = gradient(y, T);   % dy/dt
+    du = gradient(u, T);   % du/dt
+    nFeat = length(top_output_lags) + length(significant_input_lags) + ...
+            length(top_output_dot_lags) + length(significant_input_dot_lags);
+    X = zeros(N-maxLag, nFeat);
     Y = zeros(N-maxLag,1);
     for k = maxLag+1:N
         yReg = y(k-top_output_lags);
         uReg = u(k-significant_input_lags);
-        X(k-maxLag,:) = [yReg(:)' uReg(:)'];
+        dyReg = dy(k-top_output_dot_lags);
+        duReg = du(k-significant_input_dot_lags);
+        X(k-maxLag,:) = [yReg(:)' uReg(:)' dyReg(:)' duReg(:)'];
         Y(k-maxLag) = y(k);
     end
 
@@ -89,7 +100,9 @@ u_matrix = [timeVector, u(:)];   % first column = time, second column = data
 
 %% Package everything Simulink needs into one file
 save(outputFile, 'net', 'maxLag', 'top_output_lags', 'significant_input_lags', ...
+     'top_output_dot_lags', 'significant_input_dot_lags', ...
      'muX', 'sigmaX', 'muY', 'sigmaY', 'u', 'u_timeseries', 'T','C_optd','notchD');
 
 fprintf(['Saved "%s" with: net, maxLag, top_output_lags, significant_input_lags, ' ...
+    'top_output_dot_lags, significant_input_dot_lags, ' ...
     'muX, sigmaX, muY, sigmaY, u, u_timeseries, T\n'], outputFile);

@@ -1,3 +1,18 @@
+%% feature_extraction.m
+
+%   Author: Arda Gencer
+%   Date: 13.07.2026
+%   Funtionality: Takes in an input and output vector that corresponds to a
+%   system's input and output values. Performs PACF and cross correlation
+%   on these timeseries and their derivatives to find the elements of the 
+%   timeseries that is correlated with the output value at current timestep.
+%   Notes: The data must be formatted to contain two vectors: u and y that
+%   are input and output values to a given system. The script saves the
+%   most correlated input and output lags and also the most correlated
+%   terms of the derivatives of the signals to a file named
+%   "features_combined.mat". It also plots the results of the correlation
+%   so that the user can inspect them visually as well.
+
 clc; clear; close all;
 maxNumCompThreads(feature('numcores'));
 

@@ -1,13 +1,30 @@
+%% parse_data.m
+%   Author: Arda Gencer 
+%   Date Created: 13.07.2026
+%   Functionality:Converts the raw data from the speedgoat simulink experiment into two
+%   vectors of input and output timeseries. Can do the operation for multiple
+%   datasets.
+%   Notes: The initial speedgoat data should be stored in a file named "Raw
+%   Data" (this name can be changed manually in the script). The resulting
+%   data files will be saved under a folder named "Training Data". Each
+%   data file contains 3 variables. The input and output vectors and the
+%   timestep T.
+
+
 clc; clear; close all;
 
 %% Config
 rawFolder = "Raw Data";
 outFolder = "Training Data";
+graphFolder = "Graphs";
 A = 1;                  % fraction of data to keep (1 = all)
 transientEnd = 2500;    % samples to cut from the start for transient settling
 
 if ~exist(outFolder, 'dir')
     mkdir(outFolder);
+end
+if ~exist(graphFolder, 'dir')
+    mkdir(graphFolder);
 end
 
 fileList = dir(fullfile(rawFolder, "*.mat"));
@@ -62,6 +79,26 @@ for i = 1:numel(fileList)
     save(outPath, 'y', 'u', 'T');
 
     fprintf('  -> saved "%s" (%d samples)\n', outPath, length(y));
+
+    %% Plot input/output signals for this dataset and save to Graphs folder
+    timeVector = (0:length(y)-1)' * T;
+
+    fig = figure('Visible', 'off');
+    subplot(2,1,1);
+    plot(timeVector, y);
+    title(sprintf('%s — Output (y)', baseName), 'Interpreter', 'none');
+    xlabel('Time'); ylabel('y'); grid on;
+
+    subplot(2,1,2);
+    plot(timeVector, u);
+    title(sprintf('%s — Input (u)', baseName), 'Interpreter', 'none');
+    xlabel('Time'); ylabel('u'); grid on;
+
+    graphPath = fullfile(graphFolder, baseName + ".png");
+    saveas(fig, graphPath);
+    close(fig);
+
+    fprintf('  -> saved graph "%s"\n', graphPath);
 end
 
 fprintf('Done. Processed files are in "%s".\n', outFolder);

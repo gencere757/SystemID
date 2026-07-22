@@ -11,15 +11,21 @@ clc; clear; close all;
 %% Parameters
 windowSize = 150;
 intersection = 50;
+step = windowSize - intersection;
 
 cmap = jet(256);
 u_shaped_combined = []; %The combined dataset across multiple files
-%% Locate the main folder
+base_img_name = "image";
 dataFolder = "Training Data";
 saveFolder = "Image Training Data";
+%% Locate read and write folders
 fileList = dir(fullfile(dataFolder, "*.mat"));
 if isempty(fileList)
     error('No .mat files found in "%s".', dataFolder);
+end
+
+if ~exist(saveFolder, 'dir')
+    mkdir(saveFolder);
 end
 
 %% Slice the data into windows of pre determined size
@@ -29,18 +35,30 @@ for i = 1:numel(fileList)
     S = load(fpath);
     y = S.y(:);
     u = S.u(:);
-    num_images = floor(size(u,1) / windowSize);
-    newSize = num_images * windowSize;  %The truncated vector size
-    % Reshape the data
-    u_truncated = u(1:newSize);
-    u_shaped = reshape(u_truncated,[],windowSize);
-    u_shaped_combined = u_shaped_combined:u_shaped;
+    [s,f,t] = spectrogram(u,"yaxis");    %Take stft of the input data
+    s_mag = 10*log10(abs(s));     %Convert complex numbers to their magnitude values
+
+    % Buffer the data
+    s_mag_buffered = [];
+    [numRows, numCols] = size(s_mag);
+    numWindows = floor((numCols - windowSize)/step);
+    startIdxs = 1:step:numCols-windowSize+1;
+    
+    for startIdx = startIdxs %Iterate through each start point
+        window = s_mag(:,startIdx:startIdx+step);
+        s_mag_buffered = [s_mag_buffered 
+    end
 end
 
 %% Generate image data
-for i = 1:numel(u_shaped_combined,1) %Iterate through each data window
-    elem = u_shaped_combined(i,:);  %Get the corresponding data window
-    [s,f,t] = spectrogram(elem,"yaxis");    %Take stft of the input data window
-    s_mag = 10*log10(abs(s));     %Convert complex numbers to their magnitude values
-
-end
+% for i = 1:size(u_shaped_combined,1) %Iterate through each data window
+%     elem = u_shaped_combined(i,:);  %Get the corresponding data window
+%     [s,f,t] = spectrogram(elem,"yaxis");    %Take stft of the input data window
+%     s_mag = 10*log10(abs(s));     %Convert complex numbers to their magnitude values
+%     gray_img = mat2gray(s_mag);
+%     ind_img = gray2ind(gray_img,256);
+%     rgb_img = ind2rgb(ind_img,cmap);
+%     img_path = sprintf("%s_%05d.png",base_img_name,i);
+%     full_path = fullfile(saveFolder,img_path);
+%     imwrite(rgb_img,full_path);
+% end-

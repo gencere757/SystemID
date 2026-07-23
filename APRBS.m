@@ -1,12 +1,15 @@
 clc; clear; close all;
 %% Creating PRBS Signal With Increasing Frequency and -1 1 amplitude
 %Parameters
-simTime = 15;
+%Bunlar struct yapılıp ayrı dosyaya çevrilecek yönetim için
+%Ayrıca pozitiften pozitife geçen bir forma çevrilecek. Bunun için geçeceği
+%min ve max time belirlenecek
+simTime = 55;
 segmentNumber = 10; %Number of segments with different prbs signals
-T = 6.6667e-05; %Sampling time
-minFreq = 0.001;  %Minimum frequency of signals
-freqIncrement = 0.002;   %Frequency increment rate
-maxMagnitude = 75;  %Maximum magnitude of signals
+T = 6.6667e-02; %Sampling time
+minFreq = 0.2;  %Minimum frequency of signals
+freqIncrement = 0.1;   %Frequency increment rate
+maxMagnitude = 500;  %Maximum magnitude of signals
 minMagnitude = 0;
 
 
@@ -15,7 +18,7 @@ segTimestepNo = round(segmentTime / T);  %number of timesteps in a segment
 numSamples = round(simTime/(T*segmentNumber))+1; %Number of samples for a single segment
 signals = zeros(segmentNumber,numSamples);   %Vector to store signals
 for i = 1:segmentNumber
-    freq = minFreq + freqIncrement * (i-1); %Determine frequency for the current signal
+    freq = min(minFreq + freqIncrement * (i-1),1); %Determine frequency for the current signal
     signals(i,:) = idinput(numSamples,"prbs",[0 freq],[-1 1]);  %Generate PRBS with current frequency
 end
 
@@ -24,7 +27,7 @@ prbs = reshape(signals',1,[]);   %The final PRBS Signal
 %% Adding amplitude modulation
 N = length(prbs);
 
-% Find indices where prbs switches level
+% Find indices where prbs switches level (start of each constant-value run)
 switchPoints = [1, find(diff(prbs) ~= 0) + 1, N + 1];
 numHolds = length(switchPoints) - 1;
 
@@ -32,7 +35,7 @@ numHolds = length(switchPoints) - 1;
 holdAmplitudes = rand(1, numHolds) * (maxMagnitude - minMagnitude) + minMagnitude;
 
 % Quantize
-num_levels = 64;
+num_levels = 256;
 holdAmplitudes = round(holdAmplitudes * (num_levels - 1)) / (num_levels - 1);
 
 % Build the envelope by repeating each amplitude across its hold interval
@@ -43,6 +46,7 @@ end
 
 % Multiply PRBS by amplitude envelope
 aprbs = prbs .* amplitude_envelope;
+
 %% Plot
 figure;
 subplot(2,1,1);
@@ -50,6 +54,7 @@ plot(prbs);
 xlabel("Timestep");
 ylabel("Input Signal");
 title("Varying Frequency Constant Amplitude Prbs Signal");
+grid on;
 
 subplot(2,1,2);
 plot(aprbs);
@@ -57,3 +62,4 @@ xlabel("Timestep");
 ylabel("Input Signal");
 title("Varying Amplitude PRBS Signal");
 yline(0);
+grid on;

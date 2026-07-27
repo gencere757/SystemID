@@ -12,7 +12,7 @@ clc; clear; close all;
 trainSplitRatio = 0.8;
 maxEpochs = 70;
 miniBatchSize = 32;
-initialLearnRate = 1e-4;
+initialLearnRate = 5e-5;
 
 dataTypes = ["Spectrogram", "Scalogram"];
 saveFolder = "Models";
@@ -65,13 +65,19 @@ for d = 1:numel(dataTypes)
 
     horizon = dataset(1).horizon;
 
+    %% Normalize targets
+    % Normalize targets before training
+    targetMean = mean(targets);
+    targetStd = std(targets);
+    targets_norm = (targets - targetMean) / targetStd;
+
 
     %% Chronological split (no shuffling of the split itself)
     numTrain = round(trainSplitRatio * numSamples);
     trainImages = images(:,:,:,1:numTrain);
-    trainTargets = targets(1:numTrain,:);
+    trainTargets = targets_norm(1:numTrain,:);
     valImages = images(:,:,:,numTrain+1:end);
-    valTargets = targets(numTrain+1:end,:);
+    valTargets = targets_norm(numTrain+1:end,:);
 
     fprintf("Training samples: %d | Validation samples: %d\n", numTrain, numSamples-numTrain);
 
@@ -83,7 +89,7 @@ for d = 1:numel(dataTypes)
         'ValidationData', {valImages, valTargets}, ...
         'ValidationFrequency', 30, ...
         'Shuffle', 'every-epoch', ...
-        'Plots', 'none', ...
+        'Plots', 'training-progress', ...
         'Verbose', true);
 
     %% Train (fresh copy of the untrained network each time)
@@ -96,7 +102,7 @@ for d = 1:numel(dataTypes)
 
     %% Save trained model, tagged by data type
     modelSavePath = fullfile(saveFolder, sprintf("ResNet18_%s_trained.mat", dataType));
-    save(modelSavePath, "trainedNet", "rmse", "horizon");
+    save(modelSavePath, "trainedNet", "rmse", "horizon","targetMean", "targetStd");
     fprintf("Saved model to: %s\n", modelSavePath);
 end
 

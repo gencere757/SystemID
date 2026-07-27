@@ -26,13 +26,19 @@ pre_net= resnet18;
 lgraph = layerGraph(pre_net);
 
 %Replace the input layer to match actual image size
-newInput = imageInputLayer([H W C], 'Name', 'data', 'Normalization', 'none');
+origInputLayer = pre_net.Layers(1);
+datasetMean = mean(images, 4);
+
+newInput = imageInputLayer([H W C], ...
+    'Name', 'data', ...
+    'Normalization', 'zerocenter', ...
+    'Mean', datasetMean);   
 lgraph = replaceLayer(lgraph, 'data', newInput);
 
 %Remove old layers
 lgraph = removeLayers(lgraph, {'fc1000','prob','ClassificationLayer_predictions'});
 
-%Freeze the remaining layers
+%Freeze the remaining layers    
 lgraph = freezeWeights(lgraph);
 %The new layers
 newFC = fullyConnectedLayer(horizon, 'Name', 'fc_regression');  %The new fully connected layer that will output our final value
@@ -51,6 +57,13 @@ function lgraph = freezeWeights(lgraph)
     connections = lgraph.Connections;
 
     for ii = 1:numel(layers)
+        layerName = layers(ii).Name;
+
+        % Skip freezing anything in the last residual block (res5) and beyond
+        if contains(layerName, 'res5')
+            continue;
+        end
+
         props = properties(layers(ii));
         for p = 1:numel(props)
             propName = props{p};

@@ -124,6 +124,15 @@ for i = 1:numel(fileList)
 end
 save(fullfile(saveFolder, "dataset.mat"), "results", "-v7.3");
 
+%% Archive this run (dataset.mat + normalization stats + summary) so it isn't lost or overwritten next run
+% No RMSE/MAE/Fit here — this script builds a training set, it doesn't
+% fit a model — so those are NaN.
+runFolder = log_run("Spectrogram", ...
+    sprintf("%d files, %d windows, mu_u=%.3g sigma_u=%.3g mu_y=%.3g sigma_y=%.3g", ...
+        numel(fileList), numel(results), mu_u, sigma_u, mu_y, sigma_y), ...
+    NaN, NaN, NaN, [], fullfile(saveFolder, "dataset.mat"));
+copyfile(fullfile(saveFolder, "normalization_stats.mat"), fullfile(runFolder, "normalization_stats.mat"));
+
 %Computes spectrograms and also the targert horizon
 function [s_mag_u, s_mag_y, target] = compute_window_spectrograms(u, y, startIdx, window_size, horizon, winLength, noverlap, nfft, Fs)
     endIdx = startIdx + window_size - 1;

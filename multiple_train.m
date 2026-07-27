@@ -12,7 +12,7 @@ clc; clear; close all;
 trainSplitRatio = 0.8;
 maxEpochs = 70;
 miniBatchSize = 32;
-initialLearnRate = 5e-5;
+initialLearnRate = 1e-04;
 
 dataTypes = ["Spectrogram", "Scalogram"];
 saveFolder = "Models";
@@ -72,14 +72,33 @@ for d = 1:numel(dataTypes)
     targets_norm = (targets - targetMean) / targetStd;
 
 
-    %% Chronological split (no shuffling of the split itself)
-    numTrain = round(trainSplitRatio * numSamples);
-    trainImages = images(:,:,:,1:numTrain);
-    trainTargets = targets_norm(1:numTrain,:);
-    valImages = images(:,:,:,numTrain+1:end);
-    valTargets = targets_norm(numTrain+1:end,:);
+%% Block Split
+blockSize = 20;
+numBlocks = max(1, floor(numSamples / blockSize));
+blockOrder = randperm(numBlocks);
+numTrainBlocks = round(trainSplitRatio * numBlocks);
+trainBlocks = blockOrder(1:numTrainBlocks);
+valBlocks = blockOrder(numTrainBlocks+1:end);
 
-    fprintf("Training samples: %d | Validation samples: %d\n", numTrain, numSamples-numTrain);
+trainIdx = [];
+for b = trainBlocks
+    bStart = (b-1)*blockSize + 1;
+    bEnd = min(b*blockSize, numSamples);
+    trainIdx = [trainIdx, bStart:bEnd];
+end
+valIdx = [];
+for b = valBlocks
+    bStart = (b-1)*blockSize + 1;
+    bEnd = min(b*blockSize, numSamples);
+    valIdx = [valIdx, bStart:bEnd];
+end
+trainIdx = sort(trainIdx);
+valIdx = sort(valIdx);
+
+trainImages = images(:,:,:,trainIdx);
+trainTargets = targets_norm(trainIdx,:);
+valImages = images(:,:,:,valIdx);
+valTargets = targets_norm(valIdx,:);
 
     %% Training options
     options = trainingOptions('adam', ...

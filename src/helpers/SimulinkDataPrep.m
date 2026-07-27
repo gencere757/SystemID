@@ -3,8 +3,8 @@ load("Controllers\controller_base.mat");
 load("Controllers\notch_base.mat");
 
 %% Config
-cleanedDataFile = "Test Processed Data\ELEVATION_SQUARE_WAVE_25HZ_10URAD_processed.mat";   % dataset for normalization stats AND for u timeseries
-modelFile = "MLP_model.mat";
+cleanedDataFile = fullfile("data", "test", "ELEVATION_SQUARE_WAVE_25HZ_10URAD_processed.mat");   % dataset for normalization stats AND for u timeseries
+modelFile = fullfile("data", "models", "MLP_model.mat");
 outputFile = "SimulinkParams.mat";
 
 %% Load model file (expects: net, maxLag, top_output_lags, significant_input_lags,

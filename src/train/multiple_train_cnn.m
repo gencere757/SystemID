@@ -15,7 +15,7 @@ miniBatchSize = 32;
 initialLearnRate = 1e-04;
 
 dataTypes = ["Spectrogram"];
-saveFolder = "Models";
+saveFolder = fullfile("data", "models");
 
 if ~exist(saveFolder, 'dir')
     mkdir(saveFolder);
@@ -24,7 +24,7 @@ end
 %% Loop over each data type, train and save independently
 for d = 1:numel(dataTypes)
     dataType = dataTypes(d);
-    dataFolder = "Image Training Data " + dataType;
+    dataFolder = fullfile("data", "images", lower(dataType));
 
     untrainedModelPath = fullfile(saveFolder, sprintf("ResNet18_%s_model_untrained.mat", dataType));
     M = load(untrainedModelPath);

@@ -2,6 +2,10 @@
 *.csv
 *.slx.autosave
 
+# All pipeline data (raw/train/test/features/images/models) — regenerated
+# by the parse/feature/train scripts, shouldn't live in git history.
+data/
+
 *.asv
 slprj/
 *.mex*

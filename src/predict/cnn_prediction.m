@@ -1,8 +1,8 @@
 clc; clear; close all;
 
 %% Load model + normalization stats
-M = load("Models/ResNet18_Spectrogram_trained.mat");   % must contain: trainedNet, targetMean, targetStd, horizon
-S = load("Image Training Data Spectrogram/normalization_stats.mat");   % must contain: mu_u, sigma_u, mu_y, sigma_y
+M = load(fullfile("data", "models", "ResNet18_Spectrogram_trained.mat"));   % must contain: trainedNet, targetMean, targetStd, horizon
+S = load(fullfile("data", "images", "spectrogram", "normalization_stats.mat"));   % must contain: mu_u, sigma_u, mu_y, sigma_y
 
 trainedNet = M.trainedNet;
 targetMean = M.targetMean;
@@ -15,7 +15,8 @@ mu_y = S.mu_y;
 sigma_y = S.sigma_y;
 
 %% Config
-evalFolder = "Training Data";   % change to a separate "Test Data" folder if you have one
+evalFolder = fullfile("data", "test");   % held-out test set — previously defaulted to the
+                                          % training folder itself, which inflates fit metrics
 window_size = 200;
 winLength = 64;
 noverlap = round(0.9 * winLength);

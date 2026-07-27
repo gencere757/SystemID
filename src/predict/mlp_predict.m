@@ -1,11 +1,12 @@
 clc; clear; close all;
 
 %% Load model + normalization stats
-load("MLP_model.mat");   % must contain: net, maxLag, top_output_lags, significant_input_lags,
+load(fullfile("data", "models", "MLP_model.mat"));   % must contain: net, maxLag, top_output_lags, significant_input_lags,
                           % top_output_dot_lags, significant_input_dot_lags, muX, sigmaX, muY, sigmaY
 
 %% Config: folder containing datasets to evaluate
-evalFolder = "Training Data";   % change to a separate "Test Data" folder if you have one
+evalFolder = fullfile("data", "test");   % held-out test set — previously defaulted to the
+                                          % training folder itself, which inflates fit metrics
 fileList = dir(fullfile(evalFolder, "*.mat"));
 if isempty(fileList)
     error('No .mat files found in "%s".', evalFolder);

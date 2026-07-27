@@ -17,7 +17,11 @@ clc; clear; close all;
 maxNumCompThreads(feature('numcores'));
 
 %% Config
-dataFolder = "Training Data";
+dataFolder = fullfile("data", "train");
+featuresFolder = fullfile("data", "features");
+if ~exist(featuresFolder, 'dir')
+    mkdir(featuresFolder);
+end
 max_lag_output = 100;
 max_lag_input = 150;
 differentiate = true;
@@ -217,6 +221,6 @@ title('Mean |Cross-Correlation| of du/dt vs dy/dt Across All Datasets');
 xlabel('Lags'); ylabel('Mean |Cross-Correlation|');
 xlim([0, max_lag_input]);
 
-save('features_combined.mat', 'top_output_lags', 'significant_input_lags', 'dead_time', ...
+save(fullfile(featuresFolder, 'features_combined.mat'), 'top_output_lags', 'significant_input_lags', 'dead_time', ...
      'top_output_dot_lags', 'significant_input_dot_lags', 'dead_time_dot');
-fprintf('Saved features_combined.mat using %d datasets.\n', validFiles);
+fprintf('Saved %s using %d datasets.\n', fullfile(featuresFolder, 'features_combined.mat'), validFiles);

@@ -1,10 +1,10 @@
 clc;clear;close all;
-load("features_combined.mat");
+load(fullfile("data", "features", "features_combined.mat"));
 maxNumCompThreads(feature('numcores'));
 
 
-%% Load every dataset in the "Training Data" folder
-dataFolder = "Training Data";
+%% Load every dataset in the "data/train" folder
+dataFolder = fullfile("data", "train");
 fileList = dir(fullfile(dataFolder, "*.mat"));
 
 if isempty(fileList)
@@ -225,7 +225,11 @@ xlabel('Sample (concatenated across all files)'); ylabel('Output');
 title('Prediction across all training datasets (dashed lines = dataset boundaries)');
 grid on;
 
-save('MLP_model.mat', 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
+modelsFolder = fullfile("data", "models");
+if ~exist(modelsFolder, 'dir')
+    mkdir(modelsFolder);
+end
+save(fullfile(modelsFolder, 'MLP_model.mat'), 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
      'significant_input_lags', 'top_output_dot_lags', 'significant_input_dot_lags', ...
      'muX', 'sigmaX', 'muY', 'sigmaY');
 

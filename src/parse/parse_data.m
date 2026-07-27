@@ -14,9 +14,9 @@
 clc; clear; close all;
 
 %% Config
-rawFolder = "Raw Data";
-outFolder = "Training Data";
-graphFolder = "Graphs";
+rawFolder = fullfile("data", "raw", "train");
+outFolder = fullfile("data", "train");
+graphFolder = fullfile("data", "graphs");
 A = 1;                  % fraction of data to keep (1 = all)
 transientEnd = 2500;    % samples to cut from the start for transient settling
 

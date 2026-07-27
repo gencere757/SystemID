@@ -18,9 +18,9 @@ u_shaped_combined = []; %The combined dataset across multiple files
 
 %Parameters for saving the data
 base_img_name = "image";
-dataFolder = "Training Data";
-ImgFolder = "Scalogram Images";
-saveFolder = "Image Training Data Scalogram";
+dataFolder = fullfile("data", "train");
+saveFolder = fullfile("data", "images", "scalogram");
+ImgFolder = fullfile(saveFolder, "previews");
 results = struct('image', {}, 'target', {});
 resultIdx = 1;
 %% Locate read and write folders

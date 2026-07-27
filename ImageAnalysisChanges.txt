@@ -1,0 +1,9 @@
+First:
+No normalization in targets
+Freeze all except newly added layers
+no regularization
+
+2.:
+Add normalization to targets as well
+Unfreeze last conv layer but set a lower learning rate
+Add early stopping in the form of saving the lowest val. rmse model.

@@ -14,26 +14,25 @@ maxEpochs = 70;
 miniBatchSize = 32;
 initialLearnRate = 1e-04;
 
-dataTypes = ["Spectrogram", "Scalogram"];
+dataTypes = ["Spectrogram"];
 saveFolder = "Models";
-untrainedModelPath = fullfile(saveFolder, "ResNet18_model_untrained.mat");
 
 if ~exist(saveFolder, 'dir')
     mkdir(saveFolder);
 end
-
-%% Load the untrained network once
-M = load(untrainedModelPath);
-untrainedNet = M.net;
 
 %% Loop over each data type, train and save independently
 for d = 1:numel(dataTypes)
     dataType = dataTypes(d);
     dataFolder = "Image Training Data " + dataType;
 
+    untrainedModelPath = fullfile(saveFolder, sprintf("ResNet18_%s_model_untrained.mat", dataType));
+    M = load(untrainedModelPath);
+    untrainedNet = M.net;
+
     fprintf("\n========== Training on %s data ==========\n", dataType);
 
-    dataFile = dir(fullfile(dataFolder, "*.mat"));
+    dataFile = dir(fullfile(dataFolder, "dataset.mat"));
     if isempty(dataFile)
         warning("No .mat file found in '%s' -- skipping.", dataFolder);
         continue;
@@ -106,13 +105,16 @@ valTargets = targets_norm(valIdx,:);
         'MiniBatchSize', miniBatchSize, ...
         'InitialLearnRate', initialLearnRate, ...
         'ValidationData', {valImages, valTargets}, ...
+         'OutputNetwork', 'best-validation-loss', ...
         'ValidationFrequency', 30, ...
+        'ValidationPatience', 35, ...
+         'ExecutionEnvironment', 'gpu', ...
         'Shuffle', 'every-epoch', ...
         'Plots', 'training-progress', ...
         'Verbose', true);
 
     %% Train (fresh copy of the untrained network each time)
-    trainedNet = trainNetwork(trainImages, trainTargets, untrainedNet, options);
+    [trainedNet, info] = trainNetwork(trainImages, trainTargets, untrainedNet, options);
 
     %% Evaluate
     predictions = predict(trainedNet, valImages);

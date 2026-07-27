@@ -31,6 +31,9 @@ lgraph = replaceLayer(lgraph, 'data', newInput);
 
 %Remove old layers
 lgraph = removeLayers(lgraph, {'fc1000','prob','ClassificationLayer_predictions'});
+
+%Freeze the remaining layers
+lgraph = freezeWeights(lgraph);
 %The new layers
 newFC = fullyConnectedLayer(horizon, 'Name', 'fc_regression');  %The new fully connected layer that will output our final value
 newOutput = regressionLayer('Name', 'regression_output');
@@ -42,3 +45,30 @@ lgraph = connectLayers(lgraph, 'pool5', 'fc_regression');
 lgraph = connectLayers(lgraph, 'fc_regression', 'regression_output');
 net = lgraph;
 save(fullfile(saveFolder,"ResNet18_model_untrained.mat"), "net");
+
+function lgraph = freezeWeights(lgraph)
+    layers = lgraph.Layers;
+    connections = lgraph.Connections;
+
+    for ii = 1:numel(layers)
+        props = properties(layers(ii));
+        for p = 1:numel(props)
+            propName = props{p};
+            if ~isempty(regexp(propName, 'LearnRateFactor$', 'once'))
+                layers(ii).(propName) = 0;
+            end
+        end
+    end
+
+    lgraph = createLgraphUsingConnections(layers, connections);
+end
+
+function lgraph = createLgraphUsingConnections(layers, connections)
+    lgraph = layerGraph();
+    for i = 1:numel(layers)
+        lgraph = addLayers(lgraph, layers(i));
+    end
+    for c = 1:height(connections)
+        lgraph = connectLayers(lgraph, connections.Source{c}, connections.Destination{c});
+    end
+end

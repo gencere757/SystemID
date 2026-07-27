@@ -27,12 +27,11 @@ lgraph = layerGraph(pre_net);
 
 %Replace the input layer to match actual image size
 origInputLayer = pre_net.Layers(1);
-datasetMean = mean(images, 4);
 
 newInput = imageInputLayer([H W C], ...
     'Name', 'data', ...
     'Normalization', 'zerocenter', ...
-    'Mean', datasetMean);   
+    'Mean', imresize(origInputLayer.Mean, [H W]));   
 lgraph = replaceLayer(lgraph, 'data', newInput);
 
 %Remove old layers
@@ -41,7 +40,11 @@ lgraph = removeLayers(lgraph, {'fc1000','prob','ClassificationLayer_predictions'
 %Freeze the remaining layers    
 lgraph = freezeWeights(lgraph);
 %The new layers
-newFC = fullyConnectedLayer(horizon, 'Name', 'fc_regression');  %The new fully connected layer that will output our final value
+fineTuneFactor = 0.1;
+lgraph = setLayerLearnRates(lgraph, fineTuneFactor);
+
+newFC = fullyConnectedLayer(horizon, 'Name', 'fc_regression', ...
+    'WeightLearnRateFactor', 10, 'BiasLearnRateFactor', 10);  %The new fully connected layer that will output our final value
 newOutput = regressionLayer('Name', 'regression_output');
 %Apply the new layers
 lgraph = addLayers(lgraph, newFC);
@@ -84,4 +87,26 @@ function lgraph = createLgraphUsingConnections(layers, connections)
     for c = 1:height(connections)
         lgraph = connectLayers(lgraph, connections.Source{c}, connections.Destination{c});
     end
+end
+
+function lgraph = setLayerLearnRates(lgraph, fineTuneFactor)
+    layers = lgraph.Layers;
+    connections = lgraph.Connections;
+
+    for ii = 1:numel(layers)
+        layerName = layers(ii).Name;
+
+        isLastBlock = contains(layerName, 'res5') || contains(layerName, 'bn5');
+        factor = fineTuneFactor * double(isLastBlock);
+
+        props = properties(layers(ii));
+        for p = 1:numel(props)
+            propName = props{p};
+            if ~isempty(regexp(propName, 'LearnRateFactor$', 'once'))
+                layers(ii).(propName) = factor;
+            end
+        end
+    end
+
+    lgraph = createLgraphUsingConnections(layers, connections);
 end

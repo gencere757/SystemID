@@ -125,6 +125,9 @@ valTargets = targets_norm(valIdx,:);
     modelSavePath = fullfile(saveFolder, sprintf("ResNet18_%s_trained.mat", dataType));
     save(modelSavePath, "trainedNet", "rmse", "horizon","targetMean", "targetStd");
     fprintf("Saved model to: %s\n", modelSavePath);
+
+    %% Archive this run (model + metrics) so it isn't lost or overwritten next run
+    log_run("multiple_train_cnn_" + dataType, sprintf("%d samples", numSamples), rmse, NaN, NaN, [], modelSavePath);
 end
 
 fprintf("\nAll training runs complete.\n");

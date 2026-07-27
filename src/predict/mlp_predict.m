@@ -96,3 +96,8 @@ end
 %% Remove any skipped (empty) rows and show summary
 results(results.Dataset == "", :) = [];
 disp(results);
+
+%% Archive this evaluation run (per-dataset table + all plots + mean metrics)
+runFolder = log_run("mlp_predict", sprintf("%d test files", height(results)), ...
+    mean(results.RMSE), mean(results.MAE), mean(results.Fit), findall(0, 'Type', 'figure'), "");
+writetable(results, fullfile(runFolder, "per_dataset_results.csv"));

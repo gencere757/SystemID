@@ -214,7 +214,7 @@ XWhole = (X - muX)./sigmaX;
 YPredWhole = predict(net, XWhole);
 YPredWhole = YPredWhole*sigmaY + muY;
 
-figure;
+figure('Name', 'MLP_Whole_Sequence_Prediction');
 plot(Y,'b','LineWidth',1.5); hold on;
 plot(YPredWhole,'r','LineWidth',1.5);
 for b = boundarySamples(1:end-1)
@@ -232,6 +232,10 @@ end
 save(fullfile(modelsFolder, 'MLP_model.mat'), 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
      'significant_input_lags', 'top_output_dot_lags', 'significant_input_dot_lags', ...
      'muX', 'sigmaX', 'muY', 'sigmaY');
+
+%% Archive this run (model + plot + metrics) so it isn't lost or overwritten next run
+log_run("multi_data_MLP", sprintf("%d files, %s split", numel(fileList), splitMode), ...
+    rmse, mae, fit, gcf, fullfile(modelsFolder, 'MLP_model.mat'));
 
 %% --- Local function: build regressors for one dataset ---
 % Feature vector per row = [past y at top_output_lags | past u at significant_input_lags |

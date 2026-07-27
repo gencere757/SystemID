@@ -3,80 +3,53 @@
 %   Date: 24.07.2026
 clc; clear; close all;
 saveFolder = "Models";
-%% Loading the input data and targets
-dataType = "Spectrogram";
-dataFolder = "Image Training Data "+ dataType;
-file = dir(fullfile(dataFolder,"*.mat"));
-fpath = fullfile(file.folder, file.name);
-S = load(fpath);
-dataset = S.results;
-numSamples = numel(dataset);
-%Extract input images
-[H, W, C] = size(dataset(1).image);   % get dimensions from the first image
-images = zeros(H, W, C, numSamples);
-for k = 1:numSamples
-    images(:,:,:,k) = dataset(k).image;
+if ~exist(saveFolder, 'dir')
+    mkdir(saveFolder);
 end
-%Extract outputs
-targets = [dataset.target];
-%Get horizon val
-horizon = dataset(1).horizon;
-%% Loading and Modifying Network
-pre_net= resnet18;
-lgraph = layerGraph(pre_net);
 
-%Replace the input layer to match actual image size
-origInputLayer = pre_net.Layers(1);
+dataTypes = ["Spectrogram", "Scalogram"];
+fineTuneFactor = 0.1;   %For conv5
+fineTuneFactorEarlier = 0.03;   %For conv4
 
-newInput = imageInputLayer([H W C], ...
-    'Name', 'data', ...
-    'Normalization', 'zerocenter', ...
-    'Mean', imresize(origInputLayer.Mean, [H W]));   
-lgraph = replaceLayer(lgraph, 'data', newInput);
+for d = 1:numel(dataTypes)
+    dataType = dataTypes(d);
+    dataFolder = "Image Training Data " + dataType;
+    file = dir(fullfile(dataFolder,"dataset.mat"));
+    fpath = fullfile(file.folder, file.name);
+    S = load(fpath, 'results');
+    dataset = S.results;
 
-%Remove old layers
-lgraph = removeLayers(lgraph, {'fc1000','prob','ClassificationLayer_predictions'});
+    [H, W, C] = size(dataset(1).image); %The size of input
+    horizon = dataset(1).horizon;   %Prediction horizon
 
-%Freeze the remaining layers    
-lgraph = freezeWeights(lgraph);
-%The new layers
-fineTuneFactor = 0.1;
-lgraph = setLayerLearnRates(lgraph, fineTuneFactor);
+    pre_net = resnet18;
+    lgraph = layerGraph(pre_net);
 
-newFC = fullyConnectedLayer(horizon, 'Name', 'fc_regression', ...
-    'WeightLearnRateFactor', 10, 'BiasLearnRateFactor', 10);  %The new fully connected layer that will output our final value
-newOutput = regressionLayer('Name', 'regression_output');
-%Apply the new layers
-lgraph = addLayers(lgraph, newFC);
-lgraph = addLayers(lgraph, newOutput);
-%Connect the modified network
-lgraph = connectLayers(lgraph, 'pool5', 'fc_regression');
-lgraph = connectLayers(lgraph, 'fc_regression', 'regression_output');
-net = lgraph;
-save(fullfile(saveFolder,"ResNet18_model_untrained.mat"), "net");
+    %Modify the original input layer of ResNet18
+    origInputLayer = pre_net.Layers(1);
+    newInput = imageInputLayer([H W C], ...
+        'Name', 'data', ...
+        'Normalization', 'zerocenter', ...
+        'Mean', imresize(origInputLayer.Mean, [H W]));
+    lgraph = replaceLayer(lgraph, 'data', newInput);
+    
+    %Remove original output layers
+    lgraph = removeLayers(lgraph, {'fc1000','prob','ClassificationLayer_predictions'});
+    
+    %Freeze weight except for conv4-5 
+    lgraph = setLayerLearnRates(lgraph, fineTuneFactor, fineTuneFactorEarlier);
+    
+    %Add new output layers 
+    newFC = fullyConnectedLayer(horizon, 'Name', 'fc_regression', ...
+        'WeightLearnRateFactor', 10, 'BiasLearnRateFactor', 10);
+    newOutput = regressionLayer('Name', 'regression_output');
+    lgraph = addLayers(lgraph, newFC);
+    lgraph = addLayers(lgraph, newOutput);
+    lgraph = connectLayers(lgraph, 'pool5', 'fc_regression');
+    lgraph = connectLayers(lgraph, 'fc_regression', 'regression_output');
 
-function lgraph = freezeWeights(lgraph)
-    layers = lgraph.Layers;
-    connections = lgraph.Connections;
-
-    for ii = 1:numel(layers)
-        layerName = layers(ii).Name;
-
-        % Skip freezing anything in the last residual block (res5) and beyond
-        if contains(layerName, 'res5')
-            continue;
-        end
-
-        props = properties(layers(ii));
-        for p = 1:numel(props)
-            propName = props{p};
-            if ~isempty(regexp(propName, 'LearnRateFactor$', 'once'))
-                layers(ii).(propName) = 0;
-            end
-        end
-    end
-
-    lgraph = createLgraphUsingConnections(layers, connections);
+    net = lgraph;
+    save(fullfile(saveFolder, sprintf("ResNet18_%s_model_untrained.mat", dataType)), "net");    %Save the network
 end
 
 function lgraph = createLgraphUsingConnections(layers, connections)
@@ -89,7 +62,7 @@ function lgraph = createLgraphUsingConnections(layers, connections)
     end
 end
 
-function lgraph = setLayerLearnRates(lgraph, fineTuneFactor)
+function lgraph = setLayerLearnRates(lgraph, fineTuneFactor, fineTuneFactorEarlier)
     layers = lgraph.Layers;
     connections = lgraph.Connections;
 
@@ -97,13 +70,27 @@ function lgraph = setLayerLearnRates(lgraph, fineTuneFactor)
         layerName = layers(ii).Name;
 
         isLastBlock = contains(layerName, 'res5') || contains(layerName, 'bn5');
-        factor = fineTuneFactor * double(isLastBlock);
+        isEarlierBlock = contains(layerName, 'res4') || contains(layerName, 'bn4');
+
+        if isLastBlock
+            factor = fineTuneFactor;
+            l2Factor = fineTuneFactor;
+        elseif isEarlierBlock
+            factor = fineTuneFactorEarlier;
+            l2Factor = fineTuneFactorEarlier;
+        else
+            factor = 0;
+            l2Factor = 0;
+        end
 
         props = properties(layers(ii));
         for p = 1:numel(props)
             propName = props{p};
             if ~isempty(regexp(propName, 'LearnRateFactor$', 'once'))
                 layers(ii).(propName) = factor;
+            end
+            if ~isempty(regexp(propName, 'L2Factor$', 'once'))
+                layers(ii).(propName) = l2Factor;
             end
         end
     end

@@ -7,7 +7,7 @@ if isequal(fileName, 0)
 end
 fullPath = fullfile(filePath, fileName);
 
-S = load("Test Raw Data\ELEVATION_SQUARE_WAVE_25HZ_10URAD.mat");
+S = load(fullfile("data", "raw", "test", "ELEVATION_SQUARE_WAVE_25HZ_10URAD.mat"));
 if ~isfield(S, 'data')
     error('"%s" does not contain a variable named "data" — check the file format.', fileName);
 end

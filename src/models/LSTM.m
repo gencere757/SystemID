@@ -1,9 +1,9 @@
 clc; clear; close all;
-load("features_combined.mat");   % top_output_lags, significant_input_lags, dead_time (+ dot variants, unused here)
+load(fullfile("data", "features", "features_combined.mat"));   % top_output_lags, significant_input_lags, dead_time (+ dot variants, unused here)
 maxNumCompThreads(feature('numcores'));
 
-%% Load every dataset in the "Training Data" folder
-dataFolder = "Training Data";
+%% Load every dataset in the "data/train" folder
+dataFolder = fullfile("data", "train");
 fileList = dir(fullfile(dataFolder, "*.mat"));
 if isempty(fileList)
     error('No .mat files found in "%s". Check the folder name/path.', dataFolder);
@@ -164,7 +164,7 @@ fprintf('LSTM Validation RMSE: %.4f\n', rmse);
 fprintf('LSTM Validation MAE:  %.4f\n', mae);
 fprintf('LSTM Validation Fit:  %.2f%%\n', fit);
 
-figure;
+valFig = figure('Name', 'LSTM_Validation_Predictions');
 plot(YVal_actual, 'b', 'LineWidth', 1.2); hold on;
 plot(YPred_actual, 'r', 'LineWidth', 1.2);
 legend('True', 'Predicted');
@@ -177,7 +177,7 @@ Xnorm = normalizeSeq(X);
 YPredWhole = predict(net, Xnorm);
 YPredWhole = YPredWhole*sigmaY + muY;
 
-figure;
+wholeFig = figure('Name', 'LSTM_Whole_Sequence_Prediction');
 plot(Y,'b','LineWidth',1.5); hold on;
 plot(YPredWhole,'r','LineWidth',1.5);
 for b = boundarySamples(1:end-1)
@@ -188,4 +188,12 @@ xlabel('Sample (concatenated across all files)'); ylabel('Output');
 title('LSTM prediction across all training datasets (dashed lines = dataset boundaries)');
 grid on;
 
-save('lstm_model.mat', 'net', 'datasetNames', 'max_lag', 'dead_time', 'muX', 'sigmaX', 'muY', 'sigmaY');
+modelsFolder = fullfile("data", "models");
+if ~exist(modelsFolder, 'dir')
+    mkdir(modelsFolder);
+end
+save(fullfile(modelsFolder, 'lstm_model.mat'), 'net', 'datasetNames', 'max_lag', 'dead_time', 'muX', 'sigmaX', 'muY', 'sigmaY');
+
+%% Archive this run (model + plots + metrics) so it isn't lost or overwritten next run
+log_run("LSTM", sprintf("%d files", numel(fileList)), rmse, mae, fit, ...
+    [valFig, wholeFig], fullfile(modelsFolder, 'lstm_model.mat'));

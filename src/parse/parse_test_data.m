@@ -1,8 +1,8 @@
 clc; clear; close all;
 
 %% Config
-rawFolder = "Test Raw Data";
-outFolder = "Test Processed Data";
+rawFolder = fullfile("data", "raw", "test");
+outFolder = fullfile("data", "test");
 A = 1;                  % fraction of data to keep (1 = all)
 transientEnd = 2500;    % samples to cut from the start for transient settling
 

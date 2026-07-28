@@ -17,7 +17,11 @@ clc; clear; close all;
 maxNumCompThreads(feature('numcores'));
 
 %% Config
-dataFolder = "Training Data";
+dataFolder = fullfile("data", "train");
+featuresFolder = fullfile("data", "features");
+if ~exist(featuresFolder, 'dir')
+    mkdir(featuresFolder);
+end
 max_lag_output = 100;
 max_lag_input = 150;
 differentiate = true;
@@ -191,12 +195,12 @@ else
 end
 
 %% Diagnostic plots (aggregated, across all datasets)
-figure;
+pacfFig = figure('Name', 'Mean_PACF_Output');
 stem(lags_pacf_ref, acf_mean);
 title('Mean |PACF| of Output Across All Datasets');
 xlabel('Lags'); ylabel('Mean |Sample Autocorrelation|');
 
-figure;
+ccFig = figure('Name', 'Mean_CrossCorrelation');
 stem(lags_cc_pos_ref, cc_mean);
 hold on;
 yline(confidence_threshold, 'r--');
@@ -204,12 +208,12 @@ title('Mean |Cross-Correlation| Across All Datasets');
 xlabel('Lags'); ylabel('Mean |Cross-Correlation|');
 xlim([0, max_lag_input]);
 
-figure;
+pacfDotFig = figure('Name', 'Mean_PACF_Output_Rate');
 stem(lags_pacf_dot_ref, acf_dot_mean);
 title('Mean |PACF| of Output Rate (dy/dt) Across All Datasets');
 xlabel('Lags'); ylabel('Mean |Sample Autocorrelation|');
 
-figure;
+ccDotFig = figure('Name', 'Mean_CrossCorrelation_Rate');
 stem(lags_cc_dot_pos_ref, cc_dot_mean);
 hold on;
 yline(confidence_threshold, 'r--');
@@ -217,6 +221,14 @@ title('Mean |Cross-Correlation| of du/dt vs dy/dt Across All Datasets');
 xlabel('Lags'); ylabel('Mean |Cross-Correlation|');
 xlim([0, max_lag_input]);
 
-save('features_combined.mat', 'top_output_lags', 'significant_input_lags', 'dead_time', ...
+save(fullfile(featuresFolder, 'features_combined.mat'), 'top_output_lags', 'significant_input_lags', 'dead_time', ...
      'top_output_dot_lags', 'significant_input_dot_lags', 'dead_time_dot');
-fprintf('Saved features_combined.mat using %d datasets.\n', validFiles);
+fprintf('Saved %s using %d datasets.\n', fullfile(featuresFolder, 'features_combined.mat'), validFiles);
+
+%% Archive this run (selected lags + diagnostic plots) so it isn't lost or overwritten next run
+% No RMSE/MAE/Fit here — this script selects regressors, it doesn't fit a
+% model — so those are NaN. The useful summary is what got selected.
+log_run("feature_extraction", ...
+    sprintf("%d files, dead_time=%d, %d output lags, %d input lags", ...
+        validFiles, dead_time, numel(top_output_lags), numel(significant_input_lags)), ...
+    NaN, NaN, NaN, [pacfFig, ccFig, pacfDotFig, ccDotFig], fullfile(featuresFolder, 'features_combined.mat'));

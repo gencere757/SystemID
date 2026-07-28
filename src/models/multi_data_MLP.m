@@ -1,10 +1,10 @@
 clc;clear;close all;
-load("features_combined.mat");
+load(fullfile("data", "features", "features_combined.mat"));
 maxNumCompThreads(feature('numcores'));
 
 
-%% Load every dataset in the "Training Data" folder
-dataFolder = "Training Data";
+%% Load every dataset in the "data/train" folder
+dataFolder = fullfile("data", "train");
 fileList = dir(fullfile(dataFolder, "*.mat"));
 
 if isempty(fileList)
@@ -214,7 +214,7 @@ XWhole = (X - muX)./sigmaX;
 YPredWhole = predict(net, XWhole);
 YPredWhole = YPredWhole*sigmaY + muY;
 
-figure;
+figure('Name', 'MLP_Whole_Sequence_Prediction');
 plot(Y,'b','LineWidth',1.5); hold on;
 plot(YPredWhole,'r','LineWidth',1.5);
 for b = boundarySamples(1:end-1)
@@ -225,9 +225,17 @@ xlabel('Sample (concatenated across all files)'); ylabel('Output');
 title('Prediction across all training datasets (dashed lines = dataset boundaries)');
 grid on;
 
-save('MLP_model.mat', 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
+modelsFolder = fullfile("data", "models");
+if ~exist(modelsFolder, 'dir')
+    mkdir(modelsFolder);
+end
+save(fullfile(modelsFolder, 'MLP_model.mat'), 'net', 'datasetNames', 'maxLag', 'top_output_lags', ...
      'significant_input_lags', 'top_output_dot_lags', 'significant_input_dot_lags', ...
      'muX', 'sigmaX', 'muY', 'sigmaY');
+
+%% Archive this run (model + plot + metrics) so it isn't lost or overwritten next run
+log_run("multi_data_MLP", sprintf("%d files, %s split", numel(fileList), splitMode), ...
+    rmse, mae, fit, gcf, fullfile(modelsFolder, 'MLP_model.mat'));
 
 %% --- Local function: build regressors for one dataset ---
 % Feature vector per row = [past y at top_output_lags | past u at significant_input_lags |

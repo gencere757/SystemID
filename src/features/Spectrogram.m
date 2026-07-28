@@ -25,9 +25,9 @@ cmap = parula(256);    %Colormap
 u_shaped_combined = []; %The combined dataset across multiple files
 %Parameters for saving the data
 base_img_name = "image";
-dataFolder = "Training Data";
-ImgFolder = "Spectrogram Images";
-saveFolder = "Image Training Data Spectrogram";
+dataFolder = fullfile("data", "train");
+saveFolder = fullfile("data", "images", "spectrogram");
+ImgFolder = fullfile(saveFolder, "previews");
 results = struct('image', {}, 'target', {});
 resultIdx = 1;
 %% Locate read and write folders
@@ -74,6 +74,11 @@ sigma_u = sqrt(sumSq_u/count_u - mu_u^2);
 mu_y = sum_y / count_y;
 sigma_y = sqrt(sumSq_y/count_y - mu_y^2);
 
+% Save normalization stats alongside the dataset — cnn_prediction.m needs
+% these to normalize new windows the same way at inference time. This was
+% previously never written even though cnn_prediction.m already expected
+% it at "Image Training Data Spectrogram/normalization_stats.mat".
+save(fullfile(saveFolder, "normalization_stats.mat"), "mu_u", "sigma_u", "mu_y", "sigma_y");
 
 %% Pass 2 to normalize and save images
 
@@ -118,6 +123,15 @@ for i = 1:numel(fileList)
     end
 end
 save(fullfile(saveFolder, "dataset.mat"), "results", "-v7.3");
+
+%% Archive this run (dataset.mat + normalization stats + summary) so it isn't lost or overwritten next run
+% No RMSE/MAE/Fit here — this script builds a training set, it doesn't
+% fit a model — so those are NaN.
+runFolder = log_run("Spectrogram", ...
+    sprintf("%d files, %d windows, mu_u=%.3g sigma_u=%.3g mu_y=%.3g sigma_y=%.3g", ...
+        numel(fileList), numel(results), mu_u, sigma_u, mu_y, sigma_y), ...
+    NaN, NaN, NaN, [], fullfile(saveFolder, "dataset.mat"));
+copyfile(fullfile(saveFolder, "normalization_stats.mat"), fullfile(runFolder, "normalization_stats.mat"));
 
 %Computes spectrograms and also the targert horizon
 function [s_mag_u, s_mag_y, target] = compute_window_spectrograms(u, y, startIdx, window_size, horizon, winLength, noverlap, nfft, Fs)

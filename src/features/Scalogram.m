@@ -18,9 +18,9 @@ u_shaped_combined = []; %The combined dataset across multiple files
 
 %Parameters for saving the data
 base_img_name = "image";
-dataFolder = "Training Data";
-ImgFolder = "Scalogram Images";
-saveFolder = "Image Training Data Scalogram";
+dataFolder = fullfile("data", "train");
+saveFolder = fullfile("data", "images", "scalogram");
+ImgFolder = fullfile(saveFolder, "previews");
 results = struct('image', {}, 'target', {});
 resultIdx = 1;
 %% Locate read and write folders
@@ -104,6 +104,14 @@ for i = 1:numel(fileList)
     end
 end
 save(fullfile(saveFolder, "dataset.mat"), "results", "-v7.3");
+
+%% Archive this run (dataset.mat + window/normalization summary) so it isn't lost or overwritten next run
+% No RMSE/MAE/Fit here — this script builds a training set, it doesn't
+% fit a model — so those are NaN.
+log_run("Scalogram", ...
+    sprintf("%d files, %d windows, mu_u=%.3g sigma_u=%.3g mu_y=%.3g sigma_y=%.3g", ...
+        numel(fileList), numel(results), mu_u, sigma_u, mu_y, sigma_y), ...
+    NaN, NaN, NaN, [], fullfile(saveFolder, "dataset.mat"));
 
 %Computes scalograms and also the target horizon
 function [s_mag_u, s_mag_y, target] = compute_window_scalograms(u, y, startIdx, window_size, horizon, Fs)

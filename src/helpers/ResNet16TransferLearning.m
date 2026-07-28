@@ -2,7 +2,7 @@
 %   Author: Arda Gencer
 %   Date: 24.07.2026
 clc; clear; close all;
-saveFolder = "Models";
+saveFolder = fullfile("data", "models");
 if ~exist(saveFolder, 'dir')
     mkdir(saveFolder);
 end
@@ -13,7 +13,7 @@ fineTuneFactorEarlier = 0.03;   %For conv4
 
 for d = 1:numel(dataTypes)
     dataType = dataTypes(d);
-    dataFolder = "Image Training Data " + dataType;
+    dataFolder = fullfile("data", "images", lower(dataType));
     file = dir(fullfile(dataFolder,"dataset.mat"));
     fpath = fullfile(file.folder, file.name);
     S = load(fpath, 'results');

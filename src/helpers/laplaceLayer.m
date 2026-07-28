@@ -57,56 +57,48 @@ classdef laplaceLayer < nnet.layer.Layer
         end
 
         function Z = predict(layer, X)
-            % X: [C x B x T] dlarray. Strip any "CBT"-style format labels
-            % up front so all indexing/reshape below is unambiguous.
             if isa(X,'dlarray') && ~isempty(dims(X))
                 X = stripdims(X);
             end
             C = size(X,1); B = size(X,2); Tn = size(X,3);
-            t = linspace(0, 1, Tn);          % normalized time grid, 1 x T
-            dt = t(2) - t(1);
-
+            t = linspace(0, 1, Tn);
+            if Tn > 1
+                dt = 1 / (Tn - 1);
+            else
+                dt = 1;
+            end
+        
             K = layer.NumPoles;
-            sigma = -softplusL(layer.RawSigma);   % K x 1, guaranteed negative
-            omega = layer.Omega;                   % K x 1
-
-            omegaT   = omega * t;                  % K x T (outer product)
-            decayFwd = exp((-sigma) * t);           % K x T
-            decayInv = exp(sigma * t);               % K x T
+            sigma = -softplusL(layer.RawSigma);
+            omega = layer.Omega;
+        
+            omegaT   = omega * t;
+            decayFwd = exp((-sigma) * t);
+            decayInv = exp(sigma * t);
             cosOT = cos(omegaT);
             sinOT = sin(omegaT);
-
-            % X reshaped to [T x (C*B)] for basis projection over time
-            Xp = reshape(permute(X, [3 1 2]), Tn, C*B);   % T x (C*B)
-
-            laplaceOut = dlarray(zeros(C, B, Tn, 'like', X));
-
-            for k = 1:K
-                basisFwdReal_k = decayFwd(k,:) .* cosOT(k,:);   % 1 x T
-                basisFwdImag_k = decayFwd(k,:) .* sinOT(k,:);   % 1 x T
-
-                coeffReal_k = reshape(basisFwdReal_k * Xp * dt, C, B);  % C x B
-                coeffImag_k = reshape(basisFwdImag_k * Xp * dt, C, B);  % C x B
-
-                Rr_k = layer.Rr(:,:,k);   % C_out x C_in
-                Ri_k = layer.Ri(:,:,k);
-                outReal_k = Rr_k * coeffReal_k - Ri_k * coeffImag_k;    % C_out x B
-                outImag_k = Rr_k * coeffImag_k + Ri_k * coeffReal_k;    % C_out x B
-
-                basisInvReal_k = decayInv(k,:) .* cosOT(k,:);   % 1 x T
-                basisInvImag_k = decayInv(k,:) .* sinOT(k,:);   % 1 x T
-
-                % outer-product accumulate: [C_out x B x 1] .* [1 x 1 x T] -> [C_out x B x T]
-                term = reshape(outReal_k, C, B, 1) .* reshape(basisInvReal_k, 1, 1, Tn) ...
-                     - reshape(outImag_k, C, B, 1) .* reshape(basisInvImag_k, 1, 1, Tn);
-                laplaceOut = laplaceOut + term;
-            end
-
-            % K_phi branch: pointwise (1x1) channel mixing, applied identically at each time step
-            Xflat = reshape(X, C, B*Tn);                       % C x (B*T)
-            localFlat = layer.Wlocal * Xflat + layer.Blocal;   % C x (B*T)
+        
+            basisFwdReal = decayFwd .* cosOT;
+            basisFwdImag = decayFwd .* sinOT;
+            basisInvReal = decayInv .* cosOT;
+            basisInvImag = decayInv .* sinOT;
+        
+            Xp = reshape(permute(X, [3 1 2]), Tn, C*B);
+        
+            coeffReal = permute(reshape(basisFwdReal * Xp * dt, K, C, B), [2 3 1]);
+            coeffImag = permute(reshape(basisFwdImag * Xp * dt, K, C, B), [2 3 1]);
+        
+            outReal = pagemtimes(layer.Rr, coeffReal) - pagemtimes(layer.Ri, coeffImag);
+            outImag = pagemtimes(layer.Rr, coeffImag) + pagemtimes(layer.Ri, coeffReal);
+        
+            combinedReal = reshape(outReal, C*B, K) * basisInvReal;
+            combinedImag = reshape(outImag, C*B, K) * basisInvImag;
+            laplaceOut = reshape(combinedReal - combinedImag, C, B, Tn);
+        
+            Xflat = reshape(X, C, B*Tn);
+            localFlat = layer.Wlocal * Xflat + layer.Blocal;
             localOut = reshape(localFlat, C, B, Tn);
-
+        
             Z = laplaceOut + localOut;
         end
     end

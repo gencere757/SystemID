@@ -7,9 +7,9 @@ clc; clear; close all;
 
 %% Parameters
 trainSplitRatio = 0.8;
-maxEpochs = 70;
+maxEpochs = 1;
 miniBatchSize = 512;
-initialLearnRate = 1e-04;
+initialLearnRate = 1e-03;
 
 load(fullfile("data", "features", "features_combined.mat"));
 
@@ -150,9 +150,9 @@ layers = [
 ];
 
 options = trainingOptions("adam", ...
-    MaxEpochs=100, ...
+    MaxEpochs=maxEpochs, ...
     MiniBatchSize=512, ...
-    InitialLearnRate=1e-3, ...
+    InitialLearnRate=initialLearnRate, ...
     L2Regularization=1e-4, ...
     Shuffle="every-epoch", ...
     ValidationData={XVal, YVal}, ...
@@ -162,7 +162,9 @@ options = trainingOptions("adam", ...
     Verbose=true);
 
 %% Train
+profile on
 net = trainNetwork(XTrain, YTrain, layers, options);
+profile viewer
 
 %% Evaluate
 YPred = predict(net, XVal);

@@ -46,7 +46,9 @@ classdef laplaceLayer < nnet.layer.Layer
                 numPoles, numChannels);
             layer.NumPoles = numPoles;
             layer.NumChannels = numChannels;
-
+            
+            %Create random values for initial exponenetial and oscillaton
+            %values
             layer.RawSigma = dlarray(0.5 + rand(numPoles,1));
             layer.Omega    = dlarray(40*rand(numPoles,1));
             scale = 1/numChannels;
@@ -61,7 +63,7 @@ classdef laplaceLayer < nnet.layer.Layer
                 X = stripdims(X);
             end
             C = size(X,1); B = size(X,2); Tn = size(X,3);
-            t = linspace(0, 1, Tn);
+            t = linspace(0, 1, Tn); %Extract timesteps in the given time window
             if Tn > 1
                 dt = 1 / (Tn - 1);
             else
@@ -69,25 +71,29 @@ classdef laplaceLayer < nnet.layer.Layer
             end
         
             K = layer.NumPoles;
-            sigma = -softplusL(layer.RawSigma);
+            sigma = -softplusL(layer.RawSigma); %Apply softplus so that each term must be positive so it become decaying
             omega = layer.Omega;
         
+            %Compute the magnitude/ phase terms
             omegaT   = omega * t;
             decayFwd = exp((-sigma) * t);
             decayInv = exp(sigma * t);
             cosOT = cos(omegaT);
             sinOT = sin(omegaT);
-        
+            
             basisFwdReal = decayFwd .* cosOT;
             basisFwdImag = decayFwd .* sinOT;
             basisInvReal = decayInv .* cosOT;
             basisInvImag = decayInv .* sinOT;
-        
+            
+            %Combine channel and batch dimensions into 1
             Xp = reshape(permute(X, [3 1 2]), Tn, C*B);
-        
+            
+            %Compute the laplace coefficients for each term at each time
             coeffReal = permute(reshape(basisFwdReal * Xp * dt, K, C, B), [2 3 1]);
             coeffImag = permute(reshape(basisFwdImag * Xp * dt, K, C, B), [2 3 1]);
-        
+            
+            %Multiply laplace terms with learnable coefficients (residuals)
             outReal = pagemtimes(layer.Rr, coeffReal) - pagemtimes(layer.Ri, coeffImag);
             outImag = pagemtimes(layer.Rr, coeffImag) + pagemtimes(layer.Ri, coeffReal);
         

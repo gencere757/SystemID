@@ -1,0 +1,122 @@
+clc; close all;
+projectRoot = "C:\Users\MUSTAFAUGUR\Desktop\SystemID";
+controller_folder = fullfile(projectRoot,"data/external_controllers");
+controller_path = fullfile(controller_folder,"controller_base.mat");
+load(controller_path);
+controller_path = fullfile(controller_folder,"CposEL2NOTCH.mat");
+notch_path = fullfile(controller_folder,"notch_base.mat");
+load(controller_path);
+load(notch_path);
+
+%% Config
+dataDir = fullfile("data", "test");
+matFiles = dir(fullfile(dataDir, "*.mat"));
+
+if isempty(matFiles)
+    error("No .mat file found in %s", dataDir);
+end
+
+cleanedDataFile = fullfile(matFiles(1).folder, matFiles(1).name);
+modelFile = fullfile("data", "models", "lno_model.mat");
+outputFile = "SimulinkParams.mat";
+
+%% Load model file (expects: net, max_lag, dead_time,
+%% and ideally muX, sigmaX, muY, sigmaY already saved from training)
+M = load(modelFile);
+
+
+requiredForRegressor = {'max_lag','dead_time'};
+for i = 1:numel(requiredForRegressor)
+    if ~isfield(M, requiredForRegressor{i})
+        error('"%s" is missing "%s". Re-save your training script''s model file with this variable included.', ...
+            modelFile, requiredForRegressor{i});
+    end
+end
+
+max_lag = M.max_lag;
+dead_time = M.dead_time;
+L = max_lag - dead_time;    % window length, same formula as laplace_network_train.m
+net = M.net;
+
+%% Always load the cleaned data file — needed for u (and possibly for stats recompute)
+D = load(cleanedDataFile);
+if ~isfield(D,'y') || ~isfield(D,'u')
+    error('"%s" must contain variables "y" and "u".', cleanedDataFile);
+end
+y = D.y(:);
+u = D.u(:);
+
+if isfield(D, 'T')
+    T = D.T;
+else
+    error('"%s" must contain sampling time "T" to build the u timeseries.', cleanedDataFile);
+end
+
+%% Get muX/sigmaX/muY/sigmaY — either already in the model file, or recompute from cleaned data
+haveAllNormStats = all(isfield(M, {'muX','sigmaX','muY','sigmaY'}));
+
+if haveAllNormStats
+    fprintf('Normalization stats found in "%s" — using those directly.\n', modelFile);
+    muX = M.muX;      % 2 x 1, channel-wise (u, y) — NOT per-lag-feature like the old MLP
+    sigmaX = M.sigmaX; % 2 x 1
+    muY = M.muY;
+    sigmaY = M.sigmaY;
+else
+    fprintf('Normalization stats not found in "%s" — recomputing from "%s".\n', modelFile, cleanedDataFile);
+
+    % Rebuild the same dense 2 x L windows used at training time
+    % (must match the windowing loop in laplace_network_train.m exactly:
+    % channel 1 = u, channel 2 = y, both dense raw-sample windows — no
+    % lag selection or derivative regressors, unlike the old MLP script)
+    N = length(y);
+    startIdx = max_lag + 1;
+    if N <= startIdx
+        error('"%s" is too short (length=%d) for max_lag=%d — cannot rebuild windows.', ...
+            cleanedDataFile, N, max_lag);
+    end
+
+    Xi = cell(N-max_lag, 1);
+    Yi = zeros(N-max_lag, 1);
+    for k = startIdx:N
+        row = k - max_lag;
+        uSeq = u(k-dead_time-L+1 : k-dead_time);
+        ySeq = y(k-L : k-1);
+        Xi{row} = [uSeq(:)'; ySeq(:)'];   % 2 x L
+        Yi(row) = y(k);
+    end
+
+    % IMPORTANT: this recomputes stats from THIS dataset only. If your
+    % original training used a combined/multi-dataset X, these will NOT
+    % exactly match what the network was actually trained on — only use
+    % this fallback path if the model file truly never saved the real
+    % training-time stats. Prefer fixing the training script's save line
+    % over relying on this recompute.
+    allData = cell2mat(Xi');           % 2 x (L*numWindows)
+    muX = mean(allData, 2);            % 2 x 1
+    sigmaX = std(allData, 0, 2);       % 2 x 1
+
+    muY = mean(Yi);
+    sigmaY = std(Yi);
+
+    warning(['Recomputed muX/sigmaX/muY/sigmaY from "%s" instead of using saved training stats. ' ...
+        'These may not exactly match the original training normalization if training used ' ...
+        'a different or combined dataset.'], cleanedDataFile);
+end
+
+%% Package u as a timeseries, ready for a "From Workspace" block
+timeVector = (0:length(u)-1)' * T;
+u_timeseries = timeseries(u, timeVector);
+u_timeseries.Name = 'u';
+timeVector = (0:length(u)-1)' * T;
+u_matrix = [timeVector, u(:)];   % first column = time, second column = data
+
+%% Package everything Simulink needs into one file
+save(outputFile, 'net', 'max_lag', 'dead_time', 'L', ...
+     'muX', 'sigmaX', 'muY', 'sigmaY', 'u', 'u_timeseries', 'T','C_optd','notchD','CposEL5_2notch');
+
+fprintf(['Saved "%s" with: net, max_lag, dead_time, L, ' ...
+    'muX, sigmaX, muY, sigmaY, u, u_timeseries, T\n'], outputFile);
+
+%% Extract the learnable parameters
+P = extractLaplaceParams(net, L);
+save('lno_fast_params.mat','P','muX','sigmaX','muY','sigmaY');

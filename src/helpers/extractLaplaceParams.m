@@ -14,14 +14,6 @@ function P = extractLaplaceParams(net, L)
 %
 %       P = extractLaplaceParams(net, L);
 %       save('lno_fast_params.mat','P','muX','sigmaX','muY','sigmaY');
-%
-%   UNVERIFIED IN MATLAB (no MATLAB available in this environment). The
-%   underlying math (pooled closed-form + incremental coefficient update)
-%   was cross-checked numerically in Python/numpy against a direct
-%   translation of laplaceLayer.predict() + globalAveragePooling1dLayer
-%   and matched to floating-point precision. Please still validate this
-%   struct's use in laplaceFastPredictor against predict(net, X) on a
-%   handful of real recorded windows before trusting it in closed loop.
 
     lIdx = find(arrayfun(@(l) isa(l,'laplaceLayer'), net.Layers));
     if isempty(lIdx)

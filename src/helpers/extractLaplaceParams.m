@@ -9,8 +9,6 @@ function P = extractLaplaceParams(net, L)
 %   L   : fixed window length used to build training rows (must match
 %         the L used in laplace_network_train.m -- max_lag - dead_time)
 %
-%   Run this ONCE after training, then save P (+ muX/sigmaX/muY/sigmaY)
-%   for use by laplaceFastPredictor.m in Simulink:
 %
 %       P = extractLaplaceParams(net, L);
 %       save('lno_fast_params.mat','P','muX','sigmaX','muY','sigmaY');

@@ -16,8 +16,6 @@ classdef laplaceLayer < nnet.layer.Layer
     %
     % Time is assumed to span a normalized [0,1] grid based on the
     % actual sequence length seen at runtime (T = size(X,3)).
-    %
-    % UNVERIFIED: written without access to MATLAB in this environment.
 
     properties
         NumPoles

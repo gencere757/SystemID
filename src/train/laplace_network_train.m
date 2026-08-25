@@ -7,7 +7,7 @@ clc; clear; close all;
 
 %% Parameters
 trainSplitRatio = 0.8;
-maxEpochs = 1;
+maxEpochs = 100;
 miniBatchSize = 512;
 initialLearnRate = 1e-03;
 
